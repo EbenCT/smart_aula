@@ -1,15 +1,16 @@
+// lib/screens/asistencia/lista_asistencia_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import '../../../providers/asistencia_provider.dart';
-import '../../../providers/estudiantes_provider.dart';
-import '../../../providers/curso_provider.dart';
-import '../../../models/asistencia.dart';
-import '../../widgets/asistencia_item.dart';
+import '../../providers/asistencia_provider.dart';
+import '../../providers/estudiantes_provider.dart';
+import '../../providers/curso_provider.dart';
+import '../../models/asistencia.dart';
 import '../../widgets/search_header_widget.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../../widgets/summary_stats_widget.dart';
+import '../../widgets/date_selector_widget.dart';
+import '../../widgets/asistencia_item.dart';
 
 class ListaAsistenciaScreen extends StatefulWidget {
   static const routeName = '/asistencia';
@@ -23,22 +24,14 @@ class ListaAsistenciaScreen extends StatefulWidget {
 class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
   DateTime _fechaSeleccionada = DateTime.now();
   bool _isLoading = false;
-  String? _filtro;
+  String _searchQuery = '';
   bool _localeInitialized = false;
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    // Inicializar los datos de localización
-    initializeDateFormatting('es', null).then((_) {
-      if (mounted) {
-        setState(() {
-          _localeInitialized = true;
-        });
-      }
-    });
-    
+    _initializeLocale();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _cargarAsistencia();
     });
@@ -50,12 +43,21 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     super.dispose();
   }
 
-  Future<void> _cargarAsistencia() async {
+  Future<void> _initializeLocale() async {
+    await initializeDateFormatting('es', null);
     if (mounted) {
       setState(() {
-        _isLoading = true;
+        _localeInitialized = true;
       });
     }
+  }
+
+  Future<void> _cargarAsistencia() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       final asistenciaProvider = Provider.of<AsistenciaProvider>(context, listen: false);
@@ -84,40 +86,13 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     }
   }
 
-  Future<void> _seleccionarFecha(BuildContext context) async {
-    final DateTime? fechaSeleccionada = await showDatePicker(
-      context: context,
-      initialDate: _fechaSeleccionada,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-      locale: const Locale('es', 'ES'),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Theme.of(context).primaryColor, 
-              onPrimary: Colors.white,
-              onSurface: Colors.black,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).primaryColor,
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (fechaSeleccionada != null && fechaSeleccionada != _fechaSeleccionada) {
-      setState(() {
-        _fechaSeleccionada = fechaSeleccionada;
-      });
-      Provider.of<AsistenciaProvider>(context, listen: false)
-          .setFechaSeleccionada(fechaSeleccionada);
-      _cargarAsistencia();
-    }
+  void _onDateChanged(DateTime newDate) {
+    setState(() {
+      _fechaSeleccionada = newDate;
+    });
+    Provider.of<AsistenciaProvider>(context, listen: false)
+        .setFechaSeleccionada(newDate);
+    _cargarAsistencia();
   }
 
   @override
@@ -137,11 +112,11 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
 
     var estudiantes = estudiantesProvider.estudiantesPorCurso(cursoSeleccionado.id);
     
-    // Aplicar filtro si existe
-    if (_filtro != null && _filtro!.isNotEmpty) {
+    // Aplicar filtro de búsqueda
+    if (_searchQuery.isNotEmpty) {
       estudiantes = estudiantes.where((e) => 
-        e.nombreCompleto.toLowerCase().contains(_filtro!.toLowerCase()) ||
-        e.codigo.toLowerCase().contains(_filtro!.toLowerCase())
+        e.nombreCompleto.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+        e.codigo.toLowerCase().contains(_searchQuery.toLowerCase())
       ).toList();
     }
     
@@ -159,12 +134,16 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
             hintText: 'Buscar estudiante...',
             onSearchChanged: (value) {
               setState(() {
-                _filtro = value;
+                _searchQuery = value;
               });
             },
             controller: _searchController,
-            searchValue: _filtro,
-            additionalWidget: _buildFechaSelector(),
+            searchValue: _searchQuery,
+            additionalWidget: DateSelectorWidget(
+              selectedDate: _fechaSeleccionada,
+              onDateChanged: _onDateChanged,
+              localeInitialized: _localeInitialized,
+            ),
           ),
           
           // Resumen de asistencia
@@ -186,68 +165,12 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Asistencias guardadas correctamente'),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
-        },
+        onPressed: _guardarAsistencias,
         icon: const Icon(Icons.save),
         label: const Text('Guardar'),
         tooltip: 'Guardar asistencias',
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
-      ),
-    );
-  }
-
-  Widget _buildFechaSelector() {
-    return GestureDetector(
-      onTap: () => _seleccionarFecha(context),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: Theme.of(context).dividerColor,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Fecha de clase',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _localeInitialized 
-                    ? DateFormat('EEEE, dd MMMM yyyy', 'es').format(_fechaSeleccionada)
-                    : DateFormat('yyyy-MM-dd').format(_fechaSeleccionada),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            Icon(
-              Icons.calendar_today,
-              color: Theme.of(context).primaryColor,
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -333,6 +256,19 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
           },
         );
       },
+    );
+  }
+
+  void _guardarAsistencias() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Asistencias guardadas correctamente'),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
     );
   }
 }
