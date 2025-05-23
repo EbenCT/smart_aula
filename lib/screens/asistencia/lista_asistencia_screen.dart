@@ -61,6 +61,7 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
           SnackBar(
             content: Text('Error al cargar asistencia: ${error.toString()}'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -120,19 +121,27 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     final cursoProvider = Provider.of<CursoProvider>(context);
     final estudiantesProvider = Provider.of<EstudiantesProvider>(context);
     final asistenciaProvider = Provider.of<AsistenciaProvider>(context);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     final cursoSeleccionado = cursoProvider.cursoSeleccionado;
     
     if (cursoSeleccionado == null) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.class_outlined, size: 72, color: Colors.grey),
-            SizedBox(height: 16),
+            Icon(
+              Icons.class_outlined, 
+              size: 72, 
+              color: Theme.of(context).disabledColor,
+            ),
+            const SizedBox(height: 16),
             Text(
               'Seleccione un curso para ver la asistencia',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 18, 
+                color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6),
+              ),
             ),
           ],
         ),
@@ -162,14 +171,15 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     int justificados = asistencias.where((a) => a.estado == EstadoAsistencia.justificado).length;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
           // Cabecera con fecha y filtro
-          _buildHeader(),
+          _buildHeader(isDarkMode),
           
           // Resumen de asistencia
           if (totalEstudiantes > 0)
-            _buildAsistenciaSummary(presentes, tardanzas, ausentes, justificados, totalEstudiantes),
+            _buildAsistenciaSummary(presentes, tardanzas, ausentes, justificados, totalEstudiantes, isDarkMode),
           
           // Lista de estudiantes
           Expanded(
@@ -184,27 +194,33 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Asistencias guardadas correctamente'),
+            SnackBar(
+              content: const Text('Asistencias guardadas correctamente'),
               backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           );
         },
         icon: const Icon(Icons.save),
         label: const Text('Guardar'),
         tooltip: 'Guardar asistencias',
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isDarkMode) {
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
+            color: Theme.of(context).shadowColor.withOpacity(0.1),
             spreadRadius: 1,
             blurRadius: 3,
             offset: const Offset(0, 2),
@@ -219,9 +235,11 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(
+                  color: Theme.of(context).dividerColor,
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -231,18 +249,16 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
                     children: [
                       Text(
                         'Fecha de clase',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         _localeInitialized 
                           ? DateFormat('EEEE, dd MMMM yyyy', 'es').format(_fechaSeleccionada)
-                          : DateFormat('yyyy-MM-dd').format(_fechaSeleccionada), // Formato simple si no se ha inicializado
-                        style: const TextStyle(
-                          fontSize: 16,
+                          : DateFormat('yyyy-MM-dd').format(_fechaSeleccionada),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -263,20 +279,30 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
             onChanged: _filtrarEstudiantes,
             decoration: InputDecoration(
               hintText: 'Buscar estudiante...',
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon: Icon(
+                Icons.search,
+                color: Theme.of(context).iconTheme.color,
+              ),
               filled: true,
-              fillColor: Colors.grey.shade100,
+              fillColor: Theme.of(context).inputDecorationTheme.fillColor,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+                borderSide: BorderSide(
+                  color: Theme.of(context).dividerColor,
+                ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+                borderSide: BorderSide(
+                  color: Theme.of(context).dividerColor,
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Theme.of(context).primaryColor),
+                borderSide: BorderSide(
+                  color: Theme.of(context).primaryColor,
+                  width: 2,
+                ),
               ),
               contentPadding: const EdgeInsets.symmetric(vertical: 12),
             ),
@@ -286,73 +312,69 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     );
   }
 
-  Widget _buildAsistenciaSummary(int presentes, int tardanzas, int ausentes, int justificados, int total) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              spreadRadius: 1,
-              blurRadius: 3,
-              offset: const Offset(0, 1),
+  Widget _buildAsistenciaSummary(int presentes, int tardanzas, int ausentes, int justificados, int total, bool isDarkMode) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).shadowColor.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Resumen de Asistencia',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Resumen de Asistencia',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildSummaryItem('Presentes', presentes, Colors.green, isDarkMode),
+              _buildSummaryItem('Tardes', tardanzas, Colors.amber, isDarkMode),
+              _buildSummaryItem('Ausentes', ausentes, Colors.red, isDarkMode),
+              _buildSummaryItem('Justificados', justificados, Colors.blue, isDarkMode),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(
+            value: total > 0 ? (presentes + tardanzas + justificados) / total : 0,
+            backgroundColor: Theme.of(context).dividerColor.withOpacity(0.3),
+            color: Colors.green,
+            minHeight: 8,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Asistencia general: ${total > 0 ? ((presentes + tardanzas + justificados) * 100 / total).toStringAsFixed(0) : "0"}%',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildSummaryItem('Presentes', presentes, Colors.green),
-                _buildSummaryItem('Tardes', tardanzas, Colors.amber),
-                _buildSummaryItem('Ausentes', ausentes, Colors.red),
-                _buildSummaryItem('Justificados', justificados, Colors.blue),
-              ],
-            ),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: total > 0 ? (presentes + tardanzas + justificados) / total : 0,
-              backgroundColor: Colors.grey.shade200,
-              color: Colors.green,
-              minHeight: 8,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Asistencia general: ${total > 0 ? ((presentes + tardanzas + justificados) * 100 / total).toStringAsFixed(0) : "0"}%',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildSummaryItem(String title, int count, Color color) {
+  Widget _buildSummaryItem(String title, int count, Color color, bool isDarkMode) {
     return Column(
       children: [
         Container(
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.2),
+            color: color.withOpacity(isDarkMode ? 0.3 : 0.2),
             shape: BoxShape.circle,
           ),
           child: Center(
@@ -368,9 +390,8 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
         const SizedBox(height: 4),
         Text(
           title,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
           ),
         ),
       ],
@@ -385,14 +406,14 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
           Icon(
             Icons.people_outline,
             size: 72,
-            color: Colors.grey.shade400,
+            color: Theme.of(context).disabledColor,
           ),
           const SizedBox(height: 16),
           Text(
             'No hay estudiantes registrados',
             style: TextStyle(
               fontSize: 18,
-              color: Colors.grey.shade600,
+              color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6),
             ),
           ),
           const SizedBox(height: 8),
@@ -400,7 +421,7 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
             'O no se encontraron estudiantes con el filtro actual',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey.shade500,
+              color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
             ),
           ),
         ],

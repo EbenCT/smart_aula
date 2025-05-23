@@ -7,6 +7,7 @@ import '../../screens/seleccion/seleccion_periodo_curso_screen.dart';
 import '../../screens/asistencia/lista_asistencia_screen.dart';
 import '../../screens/participacion/registro_participacion_screen.dart';
 import '../../screens/estudiantes/lista_estudiantes_screen.dart';
+import 'theme_toggle_button.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({Key? key}) : super(key: key);
@@ -242,86 +243,16 @@ class AppDrawer extends StatelessWidget {
   Widget _buildThemeSection(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
-        return Column(
-          children: [
-            // Título de la sección
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.palette,
-                    color: Colors.grey.shade600,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Apariencia',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Opciones de tema
-            ListTile(
-              dense: true,
-              leading: Icon(
-                Icons.light_mode,
-                color: themeProvider.isLightMode ? Theme.of(context).primaryColor : null,
-              ),
-              title: const Text('Modo Claro'),
-              trailing: themeProvider.isLightMode 
-                  ? Icon(Icons.check, color: Theme.of(context).primaryColor)
-                  : null,
-              onTap: () async {
-                await themeProvider.setLightMode();
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-            
-            ListTile(
-              dense: true,
-              leading: Icon(
-                Icons.dark_mode,
-                color: themeProvider.isDarkMode ? Theme.of(context).primaryColor : null,
-              ),
-              title: const Text('Modo Oscuro'),
-              trailing: themeProvider.isDarkMode 
-                  ? Icon(Icons.check, color: Theme.of(context).primaryColor)
-                  : null,
-              onTap: () async {
-                await themeProvider.setDarkMode();
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-            
-            ListTile(
-              dense: true,
-              leading: Icon(
-                Icons.brightness_auto,
-                color: themeProvider.isSystemMode ? Theme.of(context).primaryColor : null,
-              ),
-              title: const Text('Tema del Sistema'),
-              trailing: themeProvider.isSystemMode 
-                  ? Icon(Icons.check, color: Theme.of(context).primaryColor)
-                  : null,
-              onTap: () async {
-                await themeProvider.setSystemMode();
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
+        return ListTile(
+          leading: Icon(
+            themeProvider.themeIcon,
+            color: Theme.of(context).iconTheme.color,
+          ),
+          title: Text(themeProvider.themeText),
+          trailing: const QuickThemeToggle(),
+          onTap: () async {
+            await themeProvider.toggleTheme();
+          },
         );
       },
     );
