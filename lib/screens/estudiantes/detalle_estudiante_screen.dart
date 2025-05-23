@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../../providers/estudiantes_provider.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/card_container_widget.dart';
@@ -18,31 +19,73 @@ class DetalleEstudianteScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final estudiantesProvider = Provider.of<EstudiantesProvider>(context);
-    final estudiante = estudiantesProvider.getEstudiantePorId(estudianteId);
+    return Consumer<EstudiantesProvider>(
+      builder: (context, estudiantesProvider, child) {
+        final estudiante = estudiantesProvider.getEstudiantePorId(int.parse(estudianteId));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(estudiante.nombreCompleto),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Encabezado con información básica
-            _buildHeaderSection(context, estudiante),
-            
-            // Tarjeta de predicción
-            if (estudiante.prediccion != null)
-              _buildPrediccionCard(context, estudiante),
-            
-            // Tarjeta de rendimiento académico
-            _buildRendimientoCard(context, estudiante),
-            
-            // Tarjeta de asistencia y participación
-            _buildAsistenciaParticipacionCard(context, estudiante),
-          ],
-        ),
-      ),
+        if (estudiante == null) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Estudiante no encontrado'),
+            ),
+            body: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.person_off,
+                    size: 72,
+                    color: Colors.grey,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'El estudiante no fue encontrado',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(estudiante.nombreCompleto),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () {
+                  estudiantesProvider.recargarEstudiantes();
+                },
+              ),
+            ],
+          ),
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                // Encabezado con información básica
+                _buildHeaderSection(context, estudiante),
+                
+                // Información personal
+                _buildInformacionPersonalCard(context, estudiante),
+                
+                // Información del tutor
+                _buildInformacionTutorCard(context, estudiante),
+                
+                // Tarjeta de predicción
+                if (estudiante.prediccion != null)
+                  _buildPrediccionCard(context, estudiante),
+                
+                // Tarjeta de rendimiento académico
+                _buildRendimientoCard(context, estudiante),
+                
+                // Tarjeta de asistencia y participación
+                _buildAsistenciaParticipacionCard(context, estudiante),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -55,10 +98,10 @@ class DetalleEstudianteScreen extends StatelessWidget {
           AvatarWidget(
             nombre: estudiante.nombre,
             apellido: estudiante.apellido,
-            radius: 40,
+            radius: 50,
             backgroundColor: Colors.white,
             textColor: Theme.of(context).primaryColor,
-            fontSize: 32,
+            fontSize: 36,
           ),
           const SizedBox(height: 16),
           Text(
@@ -68,6 +111,7 @@ class DetalleEstudianteScreen extends StatelessWidget {
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
+            textAlign: TextAlign.center,
           ),
           Text(
             estudiante.codigo,
@@ -89,6 +133,122 @@ class DetalleEstudianteScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildInformacionPersonalCard(BuildContext context, estudiante) {
+    return CardContainerWidget(
+      margin: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.person,
+                color: Theme.of(context).primaryColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Información Personal',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          _buildInfoRow(
+            context,
+            'Fecha de Nacimiento',
+            DateFormat('dd/MM/yyyy').format(estudiante.fechaNacimiento),
+            Icons.cake,
+          ),
+          const SizedBox(height: 12),
+          
+          _buildInfoRow(
+            context,
+            'Género',
+            estudiante.genero,
+            Icons.person_outline,
+          ),
+          const SizedBox(height: 12),
+          
+          _buildInfoRow(
+            context,
+            'Edad',
+            '${_calcularEdad(estudiante.fechaNacimiento)} años',
+            Icons.calendar_today,
+          ),
+          const SizedBox(height: 12),
+          
+          _buildInfoRow(
+            context,
+            'Dirección',
+            estudiante.direccionCasa,
+            Icons.home,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInformacionTutorCard(BuildContext context, estudiante) {
+    return CardContainerWidget(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.family_restroom,
+                color: Theme.of(context).primaryColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Información del Tutor',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          _buildInfoRow(
+            context,
+            'Nombre del Tutor',
+            estudiante.nombreTutor,
+            Icons.person,
+          ),
+          const SizedBox(height: 12),
+          
+          _buildInfoRow(
+            context,
+            'Teléfono',
+            estudiante.telefonoTutor,
+            Icons.phone,
+            onTap: () {
+              // Aquí se podría implementar la funcionalidad de llamar
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Llamar a ${estudiante.telefonoTutor}'),
+                  action: SnackBarAction(
+                    label: 'Cerrar',
+                    onPressed: () {},
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPrediccionCard(BuildContext context, estudiante) {
     final nivel = NivelRendimiento.values.firstWhere(
       (e) => e.toString().split('.').last == estudiante.prediccion!['nivel'],
@@ -96,16 +256,26 @@ class DetalleEstudianteScreen extends StatelessWidget {
     );
 
     return CardContainerWidget(
-      margin: const EdgeInsets.all(16.0),
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Predicción de Rendimiento',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            children: [
+              Icon(
+                Icons.analytics,
+                color: Theme.of(context).primaryColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Predicción de Rendimiento',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Row(
@@ -162,12 +332,22 @@ class DetalleEstudianteScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Rendimiento Académico',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            children: [
+              Icon(
+                Icons.school,
+                color: Theme.of(context).primaryColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Rendimiento Académico',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           const Text(
@@ -251,12 +431,22 @@ class DetalleEstudianteScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Asistencia y Participación',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            children: [
+              Icon(
+                Icons.assessment,
+                color: Theme.of(context).primaryColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Asistencia y Participación',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           
@@ -356,6 +546,74 @@ class DetalleEstudianteScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildInfoRow(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon, {
+    VoidCallback? onTap,
+  }) {
+    Widget content = Row(
+      children: [
+        Icon(
+          icon,
+          size: 20,
+          color: Theme.of(context).iconTheme.color?.withOpacity(0.7),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (onTap != null)
+          Icon(
+            Icons.chevron_right,
+            color: Theme.of(context).iconTheme.color?.withOpacity(0.5),
+          ),
+      ],
+    );
+
+    if (onTap != null) {
+      content = InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: content,
+        ),
+      );
+    }
+
+    return content;
+  }
+
+  int _calcularEdad(DateTime fechaNacimiento) {
+    final hoy = DateTime.now();
+    int edad = hoy.year - fechaNacimiento.year;
+    if (hoy.month < fechaNacimiento.month ||
+        (hoy.month == fechaNacimiento.month && hoy.day < fechaNacimiento.day)) {
+      edad--;
+    }
+    return edad;
   }
 
   String _formatEvaluacionNombre(String key) {

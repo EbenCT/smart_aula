@@ -56,74 +56,176 @@ class _RegistroParticipacionScreenState
 
   @override
   Widget build(BuildContext context) {
-    final cursoProvider = Provider.of<CursoProvider>(context);
-    final estudiantesProvider = Provider.of<EstudiantesProvider>(context);
-    
-    final cursoSeleccionado = cursoProvider.cursoSeleccionado;
-    
-    if (cursoSeleccionado == null) {
-      return const EmptyStateWidget(
-        icon: Icons.class_outlined,
-        title: 'Seleccione un curso para registrar participaciones',
-      );
-    }
+    return Consumer2<CursoProvider, EstudiantesProvider>(
+      builder: (context, cursoProvider, estudiantesProvider, child) {
+        final cursoSeleccionado = cursoProvider.cursoSeleccionado;
+        final materiaSeleccionada = cursoProvider.materiaSeleccionada;
+        
+        if (!cursoProvider.tieneSeleccionCompleta) {
+          return const EmptyStateWidget(
+            icon: Icons.class_outlined,
+            title: 'Seleccione un curso y una materia para registrar participaciones',
+          );
+        }
 
-    var estudiantes = estudiantesProvider.estudiantesPorCurso(cursoSeleccionado.id);
-    
-    // Aplicar filtro si existe
-    if (_searchQuery.isNotEmpty) {
-      estudiantes = estudiantes.where((e) => 
-        e.nombreCompleto.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-        e.codigo.toLowerCase().contains(_searchQuery.toLowerCase())
-      ).toList();
-    }
+        // Cargar estudiantes cuando hay selección completa
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (cursoSeleccionado != null && materiaSeleccionada != null) {
+            estudiantesProvider.cargarEstudiantesPorMateria(
+              cursoSeleccionado.id, 
+              materiaSeleccionada.id
+            );
+          }
+        });
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Column(
-        children: [
-          // Cabecera con fecha actual y filtro
-          SearchHeaderWidget(
-            hintText: 'Buscar estudiante...',
-            onSearchChanged: (value) {
-              setState(() {
-                _searchQuery = value;
-              });
-            },
-            controller: _searchController,
-            searchValue: _searchQuery,
-            additionalWidget: DateSelectorWidget(
-              selectedDate: _fecha,
-              onDateChanged: (date) {}, // Fecha fija para hoy
-              label: 'Fecha actual',
-              localeInitialized: _localeInitialized,
+        // Verificar estado de carga de estudiantes
+        if (estudiantesProvider.isLoading) {
+          return Scaffold(
+            body: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Cargando estudiantes...'),
+                ],
+              ),
             ),
+          );
+        }
+
+        if (estudiantesProvider.errorMessage != null) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 72,
+                    color: Colors.red,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    estudiantesProvider.errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      estudiantesProvider.recargarEstudiantes();
+                    },
+                    child: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        var estudiantes = _searchQuery.isEmpty 
+            ? estudiantesProvider.estudiantes
+            : estudiantesProvider.buscarEstudiantes(_searchQuery);
+
+        return Scaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          body: Column(
+            children: [
+              // Cabecera con fecha actual, información de materia y filtro
+              SearchHeaderWidget(
+                hintText: 'Buscar estudiante...',
+                onSearchChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+                controller: _searchController,
+                searchValue: _searchQuery,
+                additionalWidget: Column(
+                  children: [
+                    // Información de la materia
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.record_voice_over,
+                            color: Theme.of(context).primaryColor,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  materiaSeleccionada!.nombre,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                Text(
+                                  cursoSeleccionado!.nombreCompleto,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).textTheme.bodySmall?.color,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Fecha actual
+                    DateSelectorWidget(
+                      selectedDate: _fecha,
+                      onDateChanged: (date) {}, // Fecha fija para hoy
+                      label: 'Fecha actual',
+                      localeInitialized: _localeInitialized,
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Resumen de participaciones
+              if (estudiantes.isNotEmpty)
+                _buildParticipacionesSummary(estudiantes.length),
+              
+              // Lista de estudiantes
+              Expanded(
+                child: estudiantes.isEmpty
+                    ? const EmptyStateWidget(
+                        icon: Icons.people_outline,
+                        title: 'No hay estudiantes registrados',
+                        subtitle: 'O no se encontraron estudiantes con el filtro actual',
+                      )
+                    : RefreshIndicator(
+                        onRefresh: () async {
+                          await estudiantesProvider.recargarEstudiantes();
+                        },
+                        child: _buildEstudiantesList(estudiantes, materiaSeleccionada.id.toString()),
+                      ),
+              ),
+            ],
           ),
-          
-          // Resumen de participaciones
-          if (estudiantes.isNotEmpty)
-            _buildParticipacionesSummary(estudiantes.length),
-          
-          // Lista de estudiantes
-          Expanded(
-            child: estudiantes.isEmpty
-                ? const EmptyStateWidget(
-                    icon: Icons.people_outline,
-                    title: 'No hay estudiantes registrados',
-                    subtitle: 'O no se encontraron estudiantes con el filtro actual',
-                  )
-                : _buildEstudiantesList(estudiantes, cursoSeleccionado.id),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: _guardarParticipaciones,
+            icon: const Icon(Icons.save),
+            label: const Text('Guardar'),
+            tooltip: 'Guardar participaciones',
+            backgroundColor: Theme.of(context).primaryColor,
+            foregroundColor: Colors.white,
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _guardarParticipaciones,
-        icon: const Icon(Icons.save),
-        label: const Text('Guardar'),
-        tooltip: 'Guardar participaciones',
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
-      ),
+        );
+      },
     );
   }
 
@@ -168,7 +270,7 @@ class _RegistroParticipacionScreenState
     );
   }
 
-  Widget _buildEstudiantesList(List<Estudiante> estudiantes, String cursoId) {
+  Widget _buildEstudiantesList(List<Estudiante> estudiantes, String materiaId) {
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 80), // Espacio para el FAB
       itemCount: estudiantes.length,
@@ -176,7 +278,7 @@ class _RegistroParticipacionScreenState
         final estudiante = estudiantes[index];
         
         // Obtener participaciones del estudiante
-        final participacionesEstudiante = _participaciones[estudiante.id] ?? [];
+        final participacionesEstudiante = _participaciones[estudiante.id.toString()] ?? [];
         
         // Participaciones de hoy
         final participacionesHoy = participacionesEstudiante.where((p) => 
@@ -193,8 +295,8 @@ class _RegistroParticipacionScreenState
             children: [
               // Selector de tipos de participación
               ParticipationTypeSelectorWidget(
-                estudianteId: estudiante.id,
-                cursoId: cursoId,
+                estudianteId: estudiante.id.toString(),
+                cursoId: materiaId,
                 onParticipationRegistered: _registrarParticipacion,
               ),
               
@@ -210,7 +312,7 @@ class _RegistroParticipacionScreenState
                   ),
                 ),
                 const SizedBox(height: 8),
-                ...participacionesHoy.map((p) => _buildParticipacionItem(estudiante.id, p)).toList(),
+                ...participacionesHoy.map((p) => _buildParticipacionItem(estudiante.id.toString(), p)).toList(),
               ],
             ],
           ),

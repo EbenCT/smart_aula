@@ -32,64 +32,182 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cursoProvider = Provider.of<CursoProvider>(context);
-    final estudiantesProvider = Provider.of<EstudiantesProvider>(context);
-    
-    final cursoSeleccionado = cursoProvider.cursoSeleccionado;
-    
-    if (cursoSeleccionado == null) {
-      return const EmptyStateWidget(
-        icon: Icons.class_outlined,
-        title: 'Seleccione un curso para ver los estudiantes',
-      );
-    }
+    return Consumer2<CursoProvider, EstudiantesProvider>(
+      builder: (context, cursoProvider, estudiantesProvider, child) {
+        final cursoSeleccionado = cursoProvider.cursoSeleccionado;
+        final materiaSeleccionada = cursoProvider.materiaSeleccionada;
+        
+        // Verificar si hay selección completa
+        if (!cursoProvider.tieneSeleccionCompleta) {
+          return const EmptyStateWidget(
+            icon: Icons.class_outlined,
+            title: 'Seleccione un curso y una materia para ver los estudiantes',
+          );
+        }
 
-    var estudiantes = estudiantesProvider.estudiantesPorCurso(cursoSeleccionado.id);
-    
-    // Filtrar por búsqueda
-    if (_searchQuery.isNotEmpty) {
-      estudiantes = estudiantes.where((estudiante) {
-        return estudiante.nombreCompleto.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            estudiante.codigo.toLowerCase().contains(_searchQuery.toLowerCase());
-      }).toList();
-    }
+        // Cargar estudiantes cuando hay selección completa
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (cursoSeleccionado != null && materiaSeleccionada != null) {
+            estudiantesProvider.cargarEstudiantesPorMateria(
+              cursoSeleccionado.id, 
+              materiaSeleccionada.id
+            );
+          }
+        });
 
-    return Scaffold(
-      body: Column(
-        children: [
-          // Barra de búsqueda
-          SearchHeaderWidget(
-            hintText: 'Buscar estudiante por nombre o código',
-            onSearchChanged: (value) {
-              setState(() {
-                _searchQuery = value;
-              });
-            },
-            controller: _searchController,
-            searchValue: _searchQuery,
-          ),
-          
-          // Lista de estudiantes
-          Expanded(
-            child: estudiantes.isEmpty
-                ? EmptyStateWidget(
-                    icon: Icons.people_outline,
-                    title: 'No hay estudiantes disponibles',
-                    subtitle: _searchQuery.isNotEmpty 
-                        ? 'Intenta con otro término de búsqueda'
-                        : null,
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: estudiantes.length,
-                    itemBuilder: (ctx, index) {
-                      final estudiante = estudiantes[index];
-                      return _buildEstudianteCard(estudiante);
-                    },
+        // Estado de carga
+        if (estudiantesProvider.isLoading) {
+          return Scaffold(
+            body: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Cargando estudiantes...'),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Estado de error
+        if (estudiantesProvider.errorMessage != null) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 72,
+                    color: Colors.red,
                   ),
+                  const SizedBox(height: 16),
+                  Text(
+                    estudiantesProvider.errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      estudiantesProvider.recargarEstudiantes();
+                    },
+                    child: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Filtrar estudiantes por búsqueda
+        var estudiantes = _searchQuery.isEmpty 
+            ? estudiantesProvider.estudiantes
+            : estudiantesProvider.buscarEstudiantes(_searchQuery);
+
+        return Scaffold(
+          body: Column(
+            children: [
+              // Barra de búsqueda con información de la materia
+              SearchHeaderWidget(
+                hintText: 'Buscar estudiante por nombre o código',
+                onSearchChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+                controller: _searchController,
+                searchValue: _searchQuery,
+                additionalWidget: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Theme.of(context).primaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              materiaSeleccionada!.nombre,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).primaryColor,
+                              ),
+                            ),
+                            Text(
+                              cursoSeleccionado!.nombreCompleto,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).textTheme.bodySmall?.color,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '${estudiantes.length} estudiante(s)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Lista de estudiantes
+              Expanded(
+                child: estudiantes.isEmpty
+                    ? EmptyStateWidget(
+                        icon: Icons.people_outline,
+                        title: _searchQuery.isNotEmpty 
+                            ? 'No se encontraron estudiantes'
+                            : 'No hay estudiantes registrados',
+                        subtitle: _searchQuery.isNotEmpty 
+                            ? 'Intenta con otro término de búsqueda'
+                            : 'No hay estudiantes registrados en esta materia',
+                        action: _searchQuery.isNotEmpty 
+                            ? ElevatedButton(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                },
+                                child: const Text('Limpiar búsqueda'),
+                              )
+                            : null,
+                      )
+                    : RefreshIndicator(
+                        onRefresh: () async {
+                          await estudiantesProvider.recargarEstudiantes();
+                        },
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: estudiantes.length,
+                          itemBuilder: (ctx, index) {
+                            final estudiante = estudiantes[index];
+                            return _buildEstudianteCard(estudiante);
+                          },
+                        ),
+                      ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -100,7 +218,7 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (ctx) => DetalleEstudianteScreen(
-              estudianteId: estudiante.id,
+              estudianteId: estudiante.id.toString(),
             ),
           ),
         );
@@ -133,6 +251,14 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
                       ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      estudiante.email,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -174,7 +300,30 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
           
           const SizedBox(height: 8),
           
-          // Tercera fila: Etiqueta de predicción
+          // Tercera fila: Información del tutor
+          Row(
+            children: [
+              Expanded(
+                child: InfoChipWidget(
+                  icon: Icons.person_outline,
+                  text: 'Tutor: ${estudiante.nombreTutor}',
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: InfoChipWidget(
+                  icon: Icons.phone_outlined,
+                  text: estudiante.telefonoTutor,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 8),
+          
+          // Cuarta fila: Etiqueta de predicción
           PredictionLabelWidget(prediccion: estudiante.prediccion),
         ],
       ),

@@ -63,8 +63,9 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
       final asistenciaProvider = Provider.of<AsistenciaProvider>(context, listen: false);
       final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
       
-      if (cursoProvider.cursoSeleccionado != null) {
-        asistenciaProvider.setCursoId(cursoProvider.cursoSeleccionado!.id);
+      if (cursoProvider.tieneSeleccionCompleta) {
+        // Usar el ID de la materia como cursoId para mantener compatibilidad
+        asistenciaProvider.setCursoId(cursoProvider.materiaSeleccionada!.id.toString());
         asistenciaProvider.setFechaSeleccionada(_fechaSeleccionada);
       }
     } catch (error) {
@@ -97,81 +98,183 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cursoProvider = Provider.of<CursoProvider>(context);
-    final estudiantesProvider = Provider.of<EstudiantesProvider>(context);
-    final asistenciaProvider = Provider.of<AsistenciaProvider>(context);
-    
-    final cursoSeleccionado = cursoProvider.cursoSeleccionado;
-    
-    if (cursoSeleccionado == null) {
-      return const EmptyStateWidget(
-        icon: Icons.class_outlined,
-        title: 'Seleccione un curso para ver la asistencia',
-      );
-    }
+    return Consumer3<CursoProvider, EstudiantesProvider, AsistenciaProvider>(
+      builder: (context, cursoProvider, estudiantesProvider, asistenciaProvider, child) {
+        final cursoSeleccionado = cursoProvider.cursoSeleccionado;
+        final materiaSeleccionada = cursoProvider.materiaSeleccionada;
+        
+        if (!cursoProvider.tieneSeleccionCompleta) {
+          return const EmptyStateWidget(
+            icon: Icons.class_outlined,
+            title: 'Seleccione un curso y una materia para ver la asistencia',
+          );
+        }
 
-    var estudiantes = estudiantesProvider.estudiantesPorCurso(cursoSeleccionado.id);
-    
-    // Aplicar filtro de búsqueda
-    if (_searchQuery.isNotEmpty) {
-      estudiantes = estudiantes.where((e) => 
-        e.nombreCompleto.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-        e.codigo.toLowerCase().contains(_searchQuery.toLowerCase())
-      ).toList();
-    }
-    
-    final asistencias = asistenciaProvider.asistenciasPorCursoYFecha(
-      cursoSeleccionado.id, 
-      _fechaSeleccionada
-    );
+        // Cargar estudiantes cuando hay selección completa
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (cursoSeleccionado != null && materiaSeleccionada != null) {
+            estudiantesProvider.cargarEstudiantesPorMateria(
+              cursoSeleccionado.id, 
+              materiaSeleccionada.id
+            );
+          }
+        });
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Column(
-        children: [
-          // Cabecera con fecha y filtro
-          SearchHeaderWidget(
-            hintText: 'Buscar estudiante...',
-            onSearchChanged: (value) {
-              setState(() {
-                _searchQuery = value;
-              });
-            },
-            controller: _searchController,
-            searchValue: _searchQuery,
-            additionalWidget: DateSelectorWidget(
-              selectedDate: _fechaSeleccionada,
-              onDateChanged: _onDateChanged,
-              localeInitialized: _localeInitialized,
+        // Verificar estado de carga de estudiantes
+        if (estudiantesProvider.isLoading) {
+          return Scaffold(
+            body: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Cargando estudiantes...'),
+                ],
+              ),
             ),
+          );
+        }
+
+        if (estudiantesProvider.errorMessage != null) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 72,
+                    color: Colors.red,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    estudiantesProvider.errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      estudiantesProvider.recargarEstudiantes();
+                    },
+                    child: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        var estudiantes = _searchQuery.isEmpty 
+            ? estudiantesProvider.estudiantes
+            : estudiantesProvider.buscarEstudiantes(_searchQuery);
+        
+        final asistencias = asistenciaProvider.asistenciasPorCursoYFecha(
+          materiaSeleccionada!.id.toString(), 
+          _fechaSeleccionada
+        );
+
+        return Scaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          body: Column(
+            children: [
+              // Cabecera con fecha, información de materia y filtro
+              SearchHeaderWidget(
+                hintText: 'Buscar estudiante...',
+                onSearchChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+                controller: _searchController,
+                searchValue: _searchQuery,
+                additionalWidget: Column(
+                  children: [
+                    // Información de la materia
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.school,
+                            color: Theme.of(context).primaryColor,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  materiaSeleccionada.nombre,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                Text(
+                                  cursoSeleccionado!.nombreCompleto,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).textTheme.bodySmall?.color,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Selector de fecha
+                    DateSelectorWidget(
+                      selectedDate: _fechaSeleccionada,
+                      onDateChanged: _onDateChanged,
+                      localeInitialized: _localeInitialized,
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Resumen de asistencia
+              if (estudiantes.isNotEmpty)
+                _buildResumenAsistencia(asistencias, estudiantes.length),
+              
+              // Lista de estudiantes
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : estudiantes.isEmpty
+                        ? const EmptyStateWidget(
+                            icon: Icons.people_outline,
+                            title: 'No hay estudiantes registrados',
+                            subtitle: 'O no se encontraron estudiantes con el filtro actual',
+                          )
+                        : RefreshIndicator(
+                            onRefresh: () async {
+                              await estudiantesProvider.recargarEstudiantes();
+                              _cargarAsistencia();
+                            },
+                            child: _buildEstudiantesList(estudiantes, asistencias, materiaSeleccionada.id.toString()),
+                          ),
+              ),
+            ],
           ),
-          
-          // Resumen de asistencia
-          if (estudiantes.isNotEmpty)
-            _buildResumenAsistencia(asistencias, estudiantes.length),
-          
-          // Lista de estudiantes
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : estudiantes.isEmpty
-                    ? const EmptyStateWidget(
-                        icon: Icons.people_outline,
-                        title: 'No hay estudiantes registrados',
-                        subtitle: 'O no se encontraron estudiantes con el filtro actual',
-                      )
-                    : _buildEstudiantesList(estudiantes, asistencias, cursoSeleccionado.id),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: _guardarAsistencias,
+            icon: const Icon(Icons.save),
+            label: const Text('Guardar'),
+            tooltip: 'Guardar asistencias',
+            backgroundColor: Theme.of(context).primaryColor,
+            foregroundColor: Colors.white,
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _guardarAsistencias,
-        icon: const Icon(Icons.save),
-        label: const Text('Guardar'),
-        tooltip: 'Guardar asistencias',
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
-      ),
+        );
+      },
     );
   }
 
@@ -219,7 +322,7 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
   Widget _buildEstudiantesList(
     List<dynamic> estudiantes,
     List<Asistencia> asistencias,
-    String cursoId,
+    String materiaId,
   ) {
     final asistenciaProvider = Provider.of<AsistenciaProvider>(context, listen: false);
     
@@ -229,11 +332,11 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
       itemBuilder: (ctx, index) {
         final estudiante = estudiantes[index];
         final asistencia = asistencias.firstWhere(
-          (a) => a.estudianteId == estudiante.id,
+          (a) => a.estudianteId == estudiante.id.toString(),
           orElse: () => Asistencia(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
-            estudianteId: estudiante.id,
-            cursoId: cursoId,
+            estudianteId: estudiante.id.toString(),
+            cursoId: materiaId,
             fecha: _fechaSeleccionada,
             estado: EstadoAsistencia.ausente,
           ),
@@ -245,8 +348,8 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
           onAsistenciaChanged: (EstadoAsistencia nuevoEstado) {
             final nuevaAsistencia = Asistencia(
               id: asistencia.id,
-              estudianteId: estudiante.id,
-              cursoId: cursoId,
+              estudianteId: estudiante.id.toString(),
+              cursoId: materiaId,
               fecha: _fechaSeleccionada,
               estado: nuevoEstado,
               observacion: asistencia.observacion,

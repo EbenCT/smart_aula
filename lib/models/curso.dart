@@ -1,22 +1,31 @@
 class Curso {
-  final String id;
+  final int id;
   final String nombre;
-  final String codigo;
-  final String periodoId;
+  final String nivel;
+  final String paralelo;
+  final String turno;
 
   Curso({
     required this.id,
     required this.nombre,
-    required this.codigo,
-    required this.periodoId,
+    required this.nivel,
+    required this.paralelo,
+    required this.turno,
   });
+
+  // Getter para mostrar información completa del curso
+  String get nombreCompleto => '$nombre - $nivel $paralelo ($turno)';
+  
+  // Getter para mostrar código del curso
+  String get codigo => '${nivel.substring(0, 1).toUpperCase()}${paralelo}';
 
   factory Curso.fromJson(Map<String, dynamic> json) {
     return Curso(
       id: json['id'],
       nombre: json['nombre'],
-      codigo: json['codigo'],
-      periodoId: json['periodoId'],
+      nivel: json['nivel'],
+      paralelo: json['paralelo'],
+      turno: json['turno'],
     );
   }
 
@@ -24,8 +33,17 @@ class Curso {
     return {
       'id': id,
       'nombre': nombre,
-      'codigo': codigo,
-      'periodoId': periodoId,
+      'nivel': nivel,
+      'paralelo': paralelo,
+      'turno': turno,
     };
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Curso && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

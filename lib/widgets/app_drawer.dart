@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../screens/home/home_screen.dart';
-import '../../screens/seleccion/seleccion_periodo_curso_screen.dart';
+import '../../screens/seleccion/seleccion_curso_materia_screen.dart';
 import '../../screens/asistencia/lista_asistencia_screen.dart';
 import '../../screens/participacion/registro_participacion_screen.dart';
 import '../../screens/estudiantes/lista_estudiantes_screen.dart';
@@ -43,10 +43,10 @@ class AppDrawer extends StatelessWidget {
                     
                     ListTile(
                       leading: const Icon(Icons.filter_list),
-                      title: const Text('Cambiar Periodo/Curso'),
+                      title: const Text('Cambiar Curso/Materia'),
                       onTap: () {
                         Navigator.of(context).pushReplacementNamed(
-                          SeleccionPeriodoCursoScreen.routeName
+                          SeleccionCursoMateriaScreen.routeName
                         );
                       },
                     ),

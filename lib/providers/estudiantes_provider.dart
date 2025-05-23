@@ -1,85 +1,113 @@
-// ignore_for_file: unused_field
-
 import 'package:flutter/foundation.dart';
 import '../models/estudiante.dart';
+import '../services/api_service.dart';
 
 class EstudiantesProvider with ChangeNotifier {
+  final ApiService _apiService;
+  
   List<Estudiante> _estudiantes = [];
-  String? _cursoId;
+  bool _isLoading = false;
+  String? _errorMessage;
+  int? _cursoIdActual;
+  int? _materiaIdActual;
 
-  EstudiantesProvider() {
-    _cargarEstudiantes();
-  }
+  EstudiantesProvider(this._apiService);
 
+  // Getters
   List<Estudiante> get estudiantes => _estudiantes;
-  List<Estudiante> estudiantesPorCurso(String cursoId) {
-    // En un escenario real, aquí filtraríamos por curso
-    // Por ahora, devolvemos todos para simular
-    return _estudiantes;
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
+  int? get cursoIdActual => _cursoIdActual;
+  int? get materiaIdActual => _materiaIdActual;
+
+  // Cargar estudiantes por materia
+  Future<void> cargarEstudiantesPorMateria(int cursoId, int materiaId) async {
+    // Si ya tenemos los estudiantes de esta materia, no volver a cargar
+    if (_cursoIdActual == cursoId && _materiaIdActual == materiaId && _estudiantes.isNotEmpty) {
+      return;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      _estudiantes = await _apiService.getEstudiantesPorMateria(cursoId, materiaId);
+      _cursoIdActual = cursoId;
+      _materiaIdActual = materiaId;
+    } catch (e) {
+      _errorMessage = 'Error al cargar estudiantes: ${e.toString()}';
+      _estudiantes.clear();
+      _cursoIdActual = null;
+      _materiaIdActual = null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  void setCursoId(String cursoId) {
-    _cursoId = cursoId;
+  // Obtener estudiante por ID
+  Estudiante? getEstudiantePorId(int id) {
+    try {
+      return _estudiantes.firstWhere((estudiante) => estudiante.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Limpiar datos
+  void limpiarEstudiantes() {
+    _estudiantes.clear();
+    _cursoIdActual = null;
+    _materiaIdActual = null;
+    _errorMessage = null;
     notifyListeners();
   }
 
-  void _cargarEstudiantes() {
-    // Simulación de datos
-    _estudiantes = [
-      Estudiante(
-        id: '1',
-        nombre: 'Juan',
-        apellido: 'Pérez',
-        codigo: 'EST001',
-        email: 'juan.perez@mail.com',
-        notas: {'parcial1': 85, 'parcial2': 90},
-        porcentajeAsistencia: 95,
-        participaciones: 12,
-        prediccion: {
-          'valorNumerico': 88.5,
-          'nivel': 'alto',
-          'factoresInfluyentes': ['Alta participación', 'Buena asistencia']
-        },
-      ),
-      Estudiante(
-        id: '2',
-        nombre: 'María',
-        apellido: 'García',
-        codigo: 'EST002',
-        email: 'maria.garcia@mail.com',
-        notas: {'parcial1': 75, 'parcial2': 68},
-        porcentajeAsistencia: 80,
-        participaciones: 5,
-        prediccion: {
-          'valorNumerico': 72.0,
-          'nivel': 'medio',
-          'factoresInfluyentes': ['Baja participación']
-        },
-      ),
-      Estudiante(
-        id: '3',
-        nombre: 'Carlos',
-        apellido: 'López',
-        codigo: 'EST003',
-        email: 'carlos.lopez@mail.com',
-        notas: {'parcial1': 45, 'parcial2': 55},
-        porcentajeAsistencia: 60,
-        participaciones: 2,
-        prediccion: {
-          'valorNumerico': 49.0,
-          'nivel': 'bajo',
-          'factoresInfluyentes': ['Baja asistencia', 'Pocas participaciones']
-        },
-      ),
-    ];
+  // Recargar estudiantes actuales
+  Future<void> recargarEstudiantes() async {
+    if (_cursoIdActual != null && _materiaIdActual != null) {
+      // Forzar recarga limpiando los IDs actuales
+      final cursoId = _cursoIdActual!;
+      final materiaId = _materiaIdActual!;
+      _cursoIdActual = null;
+      _materiaIdActual = null;
+      await cargarEstudiantesPorMateria(cursoId, materiaId);
+    }
+  }
+
+  // Buscar estudiantes por término
+  List<Estudiante> buscarEstudiantes(String termino) {
+    if (termino.isEmpty) return _estudiantes;
     
-    notifyListeners();
+    final terminoLower = termino.toLowerCase();
+    return _estudiantes.where((estudiante) {
+      return estudiante.nombreCompleto.toLowerCase().contains(terminoLower) ||
+             estudiante.codigo.toLowerCase().contains(terminoLower) ||
+             estudiante.email.toLowerCase().contains(terminoLower);
+    }).toList();
   }
 
-  Estudiante getEstudiantePorId(String id) {
-    return _estudiantes.firstWhere(
-      (estudiante) => estudiante.id == id,
-      orElse: () => throw Exception('Estudiante no encontrado'),
-    );
+  // Verificar si hay estudiantes cargados para la materia actual
+  bool get tieneEstudiantesCargados => 
+      _cursoIdActual != null && 
+      _materiaIdActual != null && 
+      _estudiantes.isNotEmpty;
+
+  // Obtener texto descriptivo del estado actual
+  String get estadoActual {
+    if (_isLoading) {
+      return 'Cargando estudiantes...';
+    }
+    
+    if (_errorMessage != null) {
+      return 'Error: $_errorMessage';
+    }
+    
+    if (_estudiantes.isEmpty) {
+      return 'No hay estudiantes registrados';
+    }
+    
+    return '${_estudiantes.length} estudiante(s) cargado(s)';
   }
 }

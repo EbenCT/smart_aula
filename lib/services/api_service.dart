@@ -1,8 +1,9 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../config/constants.dart';
-import '../models/asistencia.dart';
 import '../models/curso.dart';
+import '../models/materia.dart';
+import '../models/asistencia.dart';
 import '../models/estudiante.dart';
 import '../models/participacion.dart';
 import '../models/periodo.dart';
@@ -101,7 +102,22 @@ class ApiService {
       String message;
       try {
         final data = json.decode(response.body);
-        message = data['mensaje'] ?? data['message'] ?? 'Error en la solicitud';
+        
+        // Manejar errores de validación de FastAPI
+        if (data is Map && data.containsKey('detail')) {
+          if (data['detail'] is List) {
+            // Error de validación con múltiples campos
+            final errors = data['detail'] as List;
+            message = errors.map((e) => e['msg'] ?? 'Error de validación').join(', ');
+          } else if (data['detail'] is String) {
+            // Error simple con mensaje string
+            message = data['detail'];
+          } else {
+            message = 'Error en la solicitud';
+          }
+        } else {
+          message = data['mensaje'] ?? data['message'] ?? 'Error en la solicitud';
+        }
       } catch (e) {
         message = 'Error en la solicitud: ${response.statusCode}';
       }
@@ -128,7 +144,47 @@ class ApiService {
     throw Exception(message);
   }
 
-  // PERIODOS
+  // CURSOS DEL DOCENTE
+  Future<List<Curso>> getCursosDocente() async {
+    try {
+      final userId = _authService.usuario?.id ?? _authService.userId;
+      if (userId == null) {
+        throw Exception('Usuario no autenticado');
+      }
+      
+      final response = await get('/docentes/cursos-docente/$userId');
+      
+      if (response is List) {
+        return response.map((json) => Curso.fromJson(json)).toList();
+      } else {
+        throw Exception('Formato de respuesta inesperado');
+      }
+    } catch (e) {
+      throw Exception('Error al obtener los cursos: $e');
+    }
+  }
+
+  // MATERIAS DEL DOCENTE POR CURSO
+  Future<List<Materia>> getMateriasDocente(int cursoId) async {
+    try {
+      final userId = _authService.usuario?.id ?? _authService.userId;
+      if (userId == null) {
+        throw Exception('Usuario no autenticado');
+      }
+      
+      final response = await get('/docentes/$userId/curso/$cursoId/materias');
+      
+      if (response is List) {
+        return response.map((json) => Materia.fromJson(json)).toList();
+      } else {
+        throw Exception('Formato de respuesta inesperado');
+      }
+    } catch (e) {
+      throw Exception('Error al obtener las materias: $e');
+    }
+  }
+
+  // PERIODOS (mantenemos para compatibilidad pero puede no usarse)
   Future<List<Periodo>> getPeriodos() async {
     try {
       // Para el desarrollo, devolvemos datos simulados
@@ -136,16 +192,12 @@ class ApiService {
       
       // En producción, usar el siguiente código:
       /*
-      final response = await _client.get(
-        Uri.parse('$baseUrl/periodos'),
-        headers: _headers,
-      );
+      final response = await get('/periodos');
       
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.map((json) => Periodo.fromJson(json)).toList();
+      if (response is List) {
+        return response.map((json) => Periodo.fromJson(json)).toList();
       } else {
-        throw Exception('Error al obtener los periodos: ${response.statusCode}');
+        throw Exception('Formato de respuesta inesperado');
       }
       */
     } catch (e) {
@@ -153,57 +205,39 @@ class ApiService {
     }
   }
 
-  // CURSOS
-  Future<List<Curso>> getCursosPorPeriodo(String periodoId) async {
+  // ESTUDIANTES POR MATERIA
+  Future<List<Estudiante>> getEstudiantesPorMateria(int cursoId, int materiaId) async {
     try {
-      // Para desarrollo, devolvemos datos simulados
-      return _getCursosSimulados(periodoId);
-      
-      // En producción, usar el siguiente código:
-      /*
-      final response = await _client.get(
-        Uri.parse('$baseUrl/periodos/$periodoId/cursos'),
-        headers: _headers,
-      );
-      
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.map((json) => Curso.fromJson(json)).toList();
-      } else {
-        throw Exception('Error al obtener los cursos: ${response.statusCode}');
+      final userId = _authService.usuario?.id ?? _authService.userId;
+      if (userId == null) {
+        throw Exception('Usuario no autenticado');
       }
-      */
-    } catch (e) {
-      throw Exception('Error al obtener los cursos: $e');
-    }
-  }
-
-  // ESTUDIANTES
-  Future<List<Estudiante>> getEstudiantesPorCurso(String cursoId) async {
-    try {
-      // Para desarrollo, devolvemos datos simulados
-      return _getEstudiantesSimulados(cursoId);
       
-      // En producción, usar el siguiente código:
-      /*
-      final response = await _client.get(
-        Uri.parse('$baseUrl/cursos/$cursoId/estudiantes'),
-        headers: _headers,
-      );
+      final response = await get('/docentes/alumnos-docente/$userId/curso/$cursoId/materia/$materiaId');
       
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.map((json) => Estudiante.fromJson(json)).toList();
+      if (response is List) {
+        return response.map((json) => Estudiante.fromJson(json)).toList();
       } else {
-        throw Exception('Error al obtener los estudiantes: ${response.statusCode}');
+        throw Exception('Formato de respuesta inesperado');
       }
-      */
     } catch (e) {
       throw Exception('Error al obtener los estudiantes: $e');
     }
   }
 
-  // ASISTENCIA
+  // ESTUDIANTES (método legacy para compatibilidad)
+  Future<List<Estudiante>> getEstudiantesPorCurso(String cursoId) async {
+    try {
+      // Para desarrollo, devolvemos datos simulados
+      return _getEstudiantesSimulados(cursoId);
+      
+      // En producción, este método podría no usarse más
+    } catch (e) {
+      throw Exception('Error al obtener los estudiantes: $e');
+    }
+  }
+
+  // ASISTENCIA (por ahora mantenemos la simulación)
   Future<List<Asistencia>> getAsistenciaPorCursoYFecha(
     String cursoId, 
     DateTime fecha
@@ -215,16 +249,12 @@ class ApiService {
       // En producción, usar el siguiente código:
       /*
       final fechaStr = '${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}';
-      final response = await _client.get(
-        Uri.parse('$baseUrl/cursos/$cursoId/asistencia?fecha=$fechaStr'),
-        headers: _headers,
-      );
+      final response = await get('/cursos/$cursoId/asistencia?fecha=$fechaStr');
       
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.map((json) => Asistencia.fromJson(json)).toList();
+      if (response is List) {
+        return response.map((json) => Asistencia.fromJson(json)).toList();
       } else {
-        throw Exception('Error al obtener la asistencia: ${response.statusCode}');
+        throw Exception('Formato de respuesta inesperado');
       }
       */
     } catch (e) {
@@ -239,22 +269,14 @@ class ApiService {
       
       // En producción, usar el siguiente código:
       /*
-      final response = await _client.post(
-        Uri.parse('$baseUrl/asistencia'),
-        headers: _headers,
-        body: json.encode(asistencia.toJson()),
-      );
-      
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('Error al registrar la asistencia: ${response.statusCode}');
-      }
+      await post('/asistencia', asistencia.toJson());
       */
     } catch (e) {
       throw Exception('Error al registrar la asistencia: $e');
     }
   }
 
-  // PARTICIPACIONES
+  // PARTICIPACIONES (por ahora mantenemos la simulación)
   Future<List<Participacion>> getParticipacionesPorEstudiante(
     String estudianteId,
     String cursoId,
@@ -265,16 +287,12 @@ class ApiService {
       
       // En producción, usar el siguiente código:
       /*
-      final response = await _client.get(
-        Uri.parse('$baseUrl/estudiantes/$estudianteId/cursos/$cursoId/participaciones'),
-        headers: _headers,
-      );
+      final response = await get('/estudiantes/$estudianteId/cursos/$cursoId/participaciones');
       
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.map((json) => Participacion.fromJson(json)).toList();
+      if (response is List) {
+        return response.map((json) => Participacion.fromJson(json)).toList();
       } else {
-        throw Exception('Error al obtener las participaciones: ${response.statusCode}');
+        throw Exception('Formato de respuesta inesperado');
       }
       */
     } catch (e) {
@@ -289,15 +307,7 @@ class ApiService {
       
       // En producción, usar el siguiente código:
       /*
-      final response = await _client.post(
-        Uri.parse('$baseUrl/participaciones'),
-        headers: _headers,
-        body: json.encode(participacion.toJson()),
-      );
-      
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('Error al registrar la participación: ${response.statusCode}');
-      }
+      await post('/participaciones', participacion.toJson());
       */
     } catch (e) {
       throw Exception('Error al registrar la participación: $e');
@@ -325,43 +335,18 @@ class ApiService {
     ];
   }
 
-  List<Curso> _getCursosSimulados(String periodoId) {
-    return [
-      Curso(
-        id: '1',
-        nombre: 'Matemáticas Avanzadas',
-        codigo: 'MAT101',
-        periodoId: '1',
-      ),
-      Curso(
-        id: '2',
-        nombre: 'Programación I',
-        codigo: 'CS101',
-        periodoId: '1',
-      ),
-      Curso(
-        id: '3',
-        nombre: 'Física Aplicada',
-        codigo: 'FIS201',
-        periodoId: '1',
-      ),
-      Curso(
-        id: '4',
-        nombre: 'Estadística',
-        codigo: 'EST101',
-        periodoId: '2',
-      ),
-    ].where((curso) => curso.periodoId == periodoId).toList();
-  }
-
   List<Estudiante> _getEstudiantesSimulados(String cursoId) {
     return [
       Estudiante(
-        id: '1',
+        id: 1,
         nombre: 'Juan',
-        apellido: 'Pérez',
-        codigo: 'EST001',
-        email: 'juan.perez@mail.com',
+        apellido: 'Pérez García',
+        fechaNacimiento: DateTime(2005, 3, 15),
+        genero: 'Masculino',
+        urlImagen: null,
+        nombreTutor: 'María García',
+        telefonoTutor: '+591 70123456',
+        direccionCasa: 'Av. América #123, La Paz',
         notas: {'parcial1': 85, 'parcial2': 90},
         porcentajeAsistencia: 95,
         participaciones: 12,
@@ -372,11 +357,15 @@ class ApiService {
         },
       ),
       Estudiante(
-        id: '2',
+        id: 2,
         nombre: 'María',
-        apellido: 'García',
-        codigo: 'EST002',
-        email: 'maria.garcia@mail.com',
+        apellido: 'López Mamani',
+        fechaNacimiento: DateTime(2005, 7, 22),
+        genero: 'Femenino',
+        urlImagen: null,
+        nombreTutor: 'Carlos López',
+        telefonoTutor: '+591 71234567',
+        direccionCasa: 'Calle Comercio #456, El Alto',
         notas: {'parcial1': 75, 'parcial2': 68},
         porcentajeAsistencia: 80,
         participaciones: 5,
@@ -387,11 +376,15 @@ class ApiService {
         },
       ),
       Estudiante(
-        id: '3',
+        id: 3,
         nombre: 'Carlos',
-        apellido: 'López',
-        codigo: 'EST003',
-        email: 'carlos.lopez@mail.com',
+        apellido: 'Quispe Condori',
+        fechaNacimiento: DateTime(2005, 11, 8),
+        genero: 'Masculino',
+        urlImagen: null,
+        nombreTutor: 'Ana Condori',
+        telefonoTutor: '+591 72345678',
+        direccionCasa: 'Zona Villa Fátima #789, La Paz',
         notas: {'parcial1': 45, 'parcial2': 55},
         porcentajeAsistencia: 60,
         participaciones: 2,
@@ -402,11 +395,15 @@ class ApiService {
         },
       ),
       Estudiante(
-        id: '4',
+        id: 4,
         nombre: 'Ana',
-        apellido: 'Martínez',
-        codigo: 'EST004',
-        email: 'ana.martinez@mail.com',
+        apellido: 'Martínez Flores',
+        fechaNacimiento: DateTime(2005, 1, 12),
+        genero: 'Femenino',
+        urlImagen: null,
+        nombreTutor: 'Roberto Martínez',
+        telefonoTutor: '+591 73456789',
+        direccionCasa: 'Av. 6 de Agosto #321, La Paz',
         notas: {'parcial1': 92, 'parcial2': 95},
         porcentajeAsistencia: 98,
         participaciones: 15,
@@ -417,11 +414,15 @@ class ApiService {
         },
       ),
       Estudiante(
-        id: '5',
+        id: 5,
         nombre: 'Pedro',
-        apellido: 'Ramírez',
-        codigo: 'EST005',
-        email: 'pedro.ramirez@mail.com',
+        apellido: 'Ramírez Choque',
+        fechaNacimiento: DateTime(2005, 9, 30),
+        genero: 'Masculino',
+        urlImagen: null,
+        nombreTutor: 'Elena Choque',
+        telefonoTutor: '+591 74567890',
+        direccionCasa: 'Calle Sagárnaga #654, La Paz',
         notas: {'parcial1': 60, 'parcial2': 65},
         porcentajeAsistencia: 75,
         participaciones: 4,

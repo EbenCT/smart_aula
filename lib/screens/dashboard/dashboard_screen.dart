@@ -18,8 +18,9 @@ class DashboardScreen extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     final cursoSeleccionado = cursoProvider.cursoSeleccionado;
+    final materiaSeleccionada = cursoProvider.materiaSeleccionada;
     
-    if (cursoSeleccionado == null) {
+    if (!cursoProvider.tieneSeleccionCompleta) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -31,18 +32,73 @@ class DashboardScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Seleccione un curso para ver el dashboard',
+              'Seleccione un curso y una materia para ver el dashboard',
               style: TextStyle(
                 fontSize: 18,
                 color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6),
               ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
       );
     }
 
-    final estudiantes = estudiantesProvider.estudiantesPorCurso(cursoSeleccionado.id);
+    // Cargar estudiantes cuando hay selección completa
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (cursoSeleccionado != null && materiaSeleccionada != null) {
+        estudiantesProvider.cargarEstudiantesPorMateria(
+          cursoSeleccionado.id, 
+          materiaSeleccionada.id
+        );
+      }
+    });
+
+    final estudiantes = estudiantesProvider.estudiantes;
+    
+    if (estudiantesProvider.isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Cargando estudiantes...'),
+          ],
+        ),
+      );
+    }
+    
+    if (estudiantesProvider.errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 72,
+              color: Colors.red,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              estudiantesProvider.errorMessage!,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.red,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () {
+                estudiantesProvider.recargarEstudiantes();
+              },
+              child: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
     
     if (estudiantes.isEmpty) {
       return Center(
@@ -86,6 +142,66 @@ class DashboardScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Información del curso y materia actual
+              Card(
+                elevation: isDarkMode ? 4 : 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Theme.of(context).primaryColor.withOpacity(0.1),
+                        Theme.of(context).primaryColor.withOpacity(0.05),
+                      ],
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.school,
+                            color: Theme.of(context).primaryColor,
+                            size: 32,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  materiaSeleccionada!.nombre,
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                Text(
+                                  cursoSeleccionado!.nombreCompleto,
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: 16),
+              
               // Tarjetas de resumen
               Row(
                 children: [
@@ -202,7 +318,7 @@ class DashboardScreen extends StatelessWidget {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (ctx) => DetalleEstudianteScreen(
-                                  estudianteId: estudiante.id,
+                                  estudianteId: estudiante.id.toString(),
                                 ),
                               ),
                             );
@@ -344,7 +460,7 @@ class DashboardScreen extends StatelessWidget {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (ctx) => DetalleEstudianteScreen(
-                                estudianteId: estudiante.id,
+                                estudianteId: estudiante.id.toString(),
                               ),
                             ),
                           );

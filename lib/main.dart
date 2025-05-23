@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'app.dart';
-import 'providers/periodo_provider.dart';
 import 'providers/curso_provider.dart';
 import 'providers/estudiantes_provider.dart';
 import 'providers/asistencia_provider.dart';
-import 'providers/theme_provider.dart'; // Nueva importación
+import 'providers/theme_provider.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 
@@ -33,9 +32,14 @@ void main() async {
         ),
         
         // Ahora registramos los providers que pueden depender del ApiService
-        ChangeNotifierProvider(create: (_) => PeriodoProvider()),
-        ChangeNotifierProvider(create: (_) => CursoProvider()),
-        ChangeNotifierProvider(create: (_) => EstudiantesProvider()),
+        ChangeNotifierProxyProvider<ApiService, CursoProvider>(
+          create: (context) => CursoProvider(Provider.of<ApiService>(context, listen: false)),
+          update: (context, apiService, previous) => previous ?? CursoProvider(apiService),
+        ),
+        ChangeNotifierProxyProvider<ApiService, EstudiantesProvider>(
+          create: (context) => EstudiantesProvider(Provider.of<ApiService>(context, listen: false)),
+          update: (context, apiService, previous) => previous ?? EstudiantesProvider(apiService),
+        ),
         ChangeNotifierProvider(create: (_) => AsistenciaProvider()),
       ],
       child: const AulaInteligenteApp(),
