@@ -1,3 +1,5 @@
+// ignore_for_file: unused_field
+
 import 'package:flutter/foundation.dart';
 import '../models/estudiante.dart';
 

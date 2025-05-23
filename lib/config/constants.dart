@@ -1,6 +1,6 @@
 class AppConstants {
   // API
-  static const String apiBaseUrl = 'https://api.aulainteligente.example.com';
+  static const String apiBaseUrl = 'https://aula-inteligente.onrender.com';
   
   // Strings
   static const String appName = 'Aula Inteligente';

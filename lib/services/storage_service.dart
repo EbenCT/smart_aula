@@ -6,11 +6,12 @@ class StorageService {
   static const String configKey = 'app_config';
   
   // Guardar datos de autenticación
-  Future<void> saveAuthData(String userId, String token) async {
+  Future<void> saveAuthData(String userId, String token, String correo) async {
     final prefs = await SharedPreferences.getInstance();
     final authData = jsonEncode({
       'userId': userId,
       'token': token,
+      'correo': correo,
       'timestamp': DateTime.now().toIso8601String(),
     });
     

@@ -1,24 +1,132 @@
-//import 'package:http/http.dart' as http;
-import '../models/periodo.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../config/constants.dart';
+import '../models/asistencia.dart';
 import '../models/curso.dart';
 import '../models/estudiante.dart';
-import '../models/asistencia.dart';
 import '../models/participacion.dart';
+import '../models/periodo.dart';
+import './auth_service.dart';
 
 class ApiService {
-  // URL base de la API (cambiar en producción)
-  static const baseUrl = 'https://api.aulainteligente.example.com';
+  final AuthService _authService;
   
-  //final http.Client _client = http.Client();
-  final String? _token;
-
-  ApiService(this._token);
-
-  // Encabezados comunes para las solicitudes
-  Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer $_token',
-  };
+  ApiService(this._authService);
+  
+  // Obtener encabezados con autenticación para las solicitudes
+  Map<String, String> get _headers {
+    final token = _authService.token;
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': token != null ? 'Bearer $token' : '',
+    };
+  }
+  
+  // Método genérico para hacer solicitudes GET
+  Future<dynamic> get(String endpoint) async {
+    final url = '${AppConstants.apiBaseUrl}$endpoint';
+    try {
+      final response = await http.get(
+        Uri.parse(url),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 15));
+      
+      return _processResponse(response);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+  
+  // Método genérico para hacer solicitudes POST
+  Future<dynamic> post(String endpoint, dynamic data) async {
+    final url = '${AppConstants.apiBaseUrl}$endpoint';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: _headers,
+        body: json.encode(data),
+      ).timeout(const Duration(seconds: 15));
+      
+      return _processResponse(response);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+  
+  // Método genérico para hacer solicitudes PUT
+  Future<dynamic> put(String endpoint, dynamic data) async {
+    final url = '${AppConstants.apiBaseUrl}$endpoint';
+    try {
+      final response = await http.put(
+        Uri.parse(url),
+        headers: _headers,
+        body: json.encode(data),
+      ).timeout(const Duration(seconds: 15));
+      
+      return _processResponse(response);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+  
+  // Método genérico para hacer solicitudes DELETE
+  Future<dynamic> delete(String endpoint) async {
+    final url = '${AppConstants.apiBaseUrl}$endpoint';
+    try {
+      final response = await http.delete(
+        Uri.parse(url),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 15));
+      
+      return _processResponse(response);
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+  
+  // Procesar respuesta HTTP
+  dynamic _processResponse(http.Response response) {
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      // Si la respuesta está vacía, retornamos un mapa vacío
+      if (response.body.isEmpty) {
+        return {};
+      }
+      
+      return json.decode(response.body);
+    } else if (response.statusCode == 401) {
+      // Token expirado o no válido, deslogueamos al usuario
+      _authService.logout();
+      throw Exception('Sesión expirada. Por favor, inicie sesión nuevamente.');
+    } else {
+      String message;
+      try {
+        final data = json.decode(response.body);
+        message = data['mensaje'] ?? data['message'] ?? 'Error en la solicitud';
+      } catch (e) {
+        message = 'Error en la solicitud: ${response.statusCode}';
+      }
+      
+      throw Exception(message);
+    }
+  }
+  
+  // Manejar errores de red
+  void _handleError(dynamic error) {
+    String message = 'Error de conexión';
+    
+    if (error is Exception) {
+      message = error.toString();
+    }
+    
+    // Errores comunes
+    if (message.contains('SocketException')) {
+      message = 'No se pudo conectar al servidor. Verifica tu conexión a internet.';
+    } else if (message.contains('timeout')) {
+      message = 'La conexión al servidor ha tardado demasiado. Inténtalo más tarde.';
+    }
+    
+    throw Exception(message);
+  }
 
   // PERIODOS
   Future<List<Periodo>> getPeriodos() async {

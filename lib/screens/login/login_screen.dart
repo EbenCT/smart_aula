@@ -14,6 +14,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -34,12 +35,15 @@ class _LoginScreenState extends State<LoginScreen> {
           _passwordController.text,
         );
       } catch (error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error de autenticación: ${error.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Solo mostrar el error si la pantalla sigue montada
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error de autenticación: ${error.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       } finally {
         if (mounted) {
           setState(() {
@@ -91,14 +95,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextFormField(
                           controller: _emailController,
                           decoration: const InputDecoration(
-                            labelText: 'Email',
+                            labelText: 'Correo electrónico',
                             prefixIcon: Icon(Icons.email),
                             border: OutlineInputBorder(),
                           ),
                           keyboardType: TextInputType.emailAddress,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
-                              return 'Por favor ingrese su email';
+                              return 'Por favor ingrese su correo electrónico';
+                            }
+                            final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                            if (!emailRegex.hasMatch(value)) {
+                              return 'Por favor ingrese un correo electrónico válido';
                             }
                             return null;
                           },
@@ -106,12 +114,23 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _passwordController,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Contraseña',
-                            prefixIcon: Icon(Icons.lock),
-                            border: OutlineInputBorder(),
+                            prefixIcon: const Icon(Icons.lock),
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                                color: Colors.grey,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
                           ),
-                          obscureText: true,
+                          obscureText: _obscurePassword,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Por favor ingrese su contraseña';
