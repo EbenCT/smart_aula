@@ -15,20 +15,55 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final cursoProvider = Provider.of<CursoProvider>(context);
     final estudiantesProvider = Provider.of<EstudiantesProvider>(context);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     
     final cursoSeleccionado = cursoProvider.cursoSeleccionado;
     
     if (cursoSeleccionado == null) {
-      return const Center(
-        child: Text('Seleccione un curso para ver el dashboard'),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.class_outlined,
+              size: 72,
+              color: Theme.of(context).disabledColor,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Seleccione un curso para ver el dashboard',
+              style: TextStyle(
+                fontSize: 18,
+                color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6),
+              ),
+            ),
+          ],
+        ),
       );
     }
 
     final estudiantes = estudiantesProvider.estudiantesPorCurso(cursoSeleccionado.id);
     
     if (estudiantes.isEmpty) {
-      return const Center(
-        child: Text('No hay estudiantes registrados en este curso'),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.people_outline,
+              size: 72,
+              color: Theme.of(context).disabledColor,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No hay estudiantes registrados en este curso',
+              style: TextStyle(
+                fontSize: 18,
+                color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6),
+              ),
+            ),
+          ],
+        ),
       );
     }
 
@@ -44,6 +79,7 @@ class DashboardScreen extends StatelessWidget {
     ).toList();
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -58,7 +94,7 @@ class DashboardScreen extends StatelessWidget {
                       titulo: 'Estudiantes',
                       valor: estudiantes.length.toString(),
                       icono: Icons.people,
-                      color: Colors.blue,
+                      color: Theme.of(context).primaryColor,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -98,45 +134,80 @@ class DashboardScreen extends StatelessWidget {
               // Estudiantes en riesgo
               if (estudiantesEnRiesgo.isNotEmpty) ...[
                 const SizedBox(height: 24),
-                const Text(
+                Text(
                   'Estudiantes en Riesgo',
-                  style: TextStyle(
-                    fontSize: 18,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Card(
-                  elevation: 4,
+                  elevation: isDarkMode ? 4 : 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  color: Colors.red.shade50,
+                  color: Colors.red.withOpacity(isDarkMode ? 0.1 : 0.05),
                   child: Column(
                     children: estudiantesEnRiesgo.map((estudiante) {
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.red,
-                          child: Text(
-                            estudiante.nombre.substring(0, 1) +
-                                estudiante.apellido.substring(0, 1),
-                            style: const TextStyle(color: Colors.white),
+                      return Container(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Theme.of(context).dividerColor.withOpacity(0.3),
+                              width: 0.5,
+                            ),
                           ),
                         ),
-                        title: Text(estudiante.nombreCompleto),
-                        subtitle: Text(
-                          'Predicción: ${estudiante.prediccion!['valorNumerico']} - Factores: ${(estudiante.prediccion!['factoresInfluyentes'] as List).join(", ")}',
-                        ),
-                        trailing: const Icon(Icons.warning, color: Colors.red),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (ctx) => DetalleEstudianteScreen(
-                                estudianteId: estudiante.id,
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.red,
+                            child: Text(
+                              estudiante.nombre.substring(0, 1) +
+                                  estudiante.apellido.substring(0, 1),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                          );
-                        },
+                          ),
+                          title: Text(
+                            estudiante.nombreCompleto,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Predicción: ${estudiante.prediccion!['valorNumerico']}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              Text(
+                                'Factores: ${(estudiante.prediccion!['factoresInfluyentes'] as List).join(", ")}',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                          trailing: const Icon(
+                            Icons.warning,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (ctx) => DetalleEstudianteScreen(
+                                  estudianteId: estudiante.id,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       );
                     }).toList(),
                   ),
@@ -145,16 +216,15 @@ class DashboardScreen extends StatelessWidget {
               
               // Distribución de rendimiento
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Distribución por Rendimiento',
-                style: TextStyle(
-                  fontSize: 18,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
               Card(
-                elevation: 4,
+                elevation: isDarkMode ? 4 : 2,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -163,6 +233,7 @@ class DashboardScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _buildDistribucionItem(
                             context,
@@ -197,13 +268,13 @@ class DashboardScreen extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      const Text(
+                      Text(
                         'La distribución muestra la cantidad de estudiantes en cada categoría de rendimiento según las predicciones.',
-                        style: TextStyle(
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontStyle: FontStyle.italic,
-                          color: Colors.grey,
-                          fontSize: 12,
+                          color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -212,20 +283,19 @@ class DashboardScreen extends StatelessWidget {
               
               // Estudiantes destacados
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Estudiantes Destacados',
-                style: TextStyle(
-                  fontSize: 18,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
               Card(
-                elevation: 4,
+                elevation: isDarkMode ? 4 : 2,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                color: Colors.green.shade50,
+                color: Colors.green.withOpacity(isDarkMode ? 0.1 : 0.05),
                 child: Column(
                   children: estudiantes
                       .where((e) => 
@@ -234,33 +304,58 @@ class DashboardScreen extends StatelessWidget {
                       )
                       .take(3)
                       .map((estudiante) {
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.green,
-                        child: Text(
-                          estudiante.nombre.substring(0, 1) +
-                              estudiante.apellido.substring(0, 1),
-                          style: const TextStyle(color: Colors.white),
+                    return Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Theme.of(context).dividerColor.withOpacity(0.3),
+                            width: 0.5,
+                          ),
                         ),
                       ),
-                      title: Text(estudiante.nombreCompleto),
-                      subtitle: Text(
-                        'Predicción: ${estudiante.prediccion!['valorNumerico']} - Asistencia: ${estudiante.porcentajeAsistencia}%',
-                      ),
-                      trailing: const Icon(Icons.star, color: Colors.amber),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (ctx) => DetalleEstudianteScreen(
-                              estudianteId: estudiante.id,
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.green,
+                          child: Text(
+                            estudiante.nombre.substring(0, 1) +
+                                estudiante.apellido.substring(0, 1),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        );
-                      },
+                        ),
+                        title: Text(
+                          estudiante.nombreCompleto,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Predicción: ${estudiante.prediccion!['valorNumerico']} - Asistencia: ${estudiante.porcentajeAsistencia}%',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        trailing: const Icon(
+                          Icons.star,
+                          color: Colors.amber,
+                          size: 20,
+                        ),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (ctx) => DetalleEstudianteScreen(
+                                estudianteId: estudiante.id,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     );
                   }).toList(),
                 ),
               ),
+              
+              const SizedBox(height: 80), // Espacio para el FAB
             ],
           ),
         ),
@@ -269,13 +364,18 @@ class DashboardScreen extends StatelessWidget {
         onPressed: () {
           // Actualizar dashboard
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Dashboard actualizado'),
+            SnackBar(
+              content: const Text('Dashboard actualizado'),
               backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           );
         },
-        child: const Icon(Icons.refresh),
+        backgroundColor: Theme.of(context).primaryColor,
+        child: const Icon(Icons.refresh, color: Colors.white),
         tooltip: 'Actualizar dashboard',
       ),
     );
@@ -295,7 +395,7 @@ class DashboardScreen extends StatelessWidget {
         children: [
           Text(
             titulo,
-            style: const TextStyle(
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -305,13 +405,14 @@ class DashboardScreen extends StatelessWidget {
             width: 30,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              color: Colors.grey.shade200,
+              color: Theme.of(context).dividerColor.withOpacity(0.3),
             ),
             child: Stack(
               alignment: Alignment.bottomCenter,
               children: [
-                Container(
-                  height: porcentaje * 100 / 100,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 800),
+                  height: porcentaje.toDouble(),
                   width: 30,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
@@ -324,16 +425,14 @@ class DashboardScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '$cantidad',
-            style: const TextStyle(
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              fontSize: 16,
             ),
           ),
           Text(
             '${porcentaje.toStringAsFixed(0)}%',
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 12,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
             ),
           ),
         ],

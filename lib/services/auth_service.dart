@@ -3,12 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/constants.dart';
 import '../services/storage_service.dart';
+import '../models/usuario.dart';
 
 class AuthService with ChangeNotifier {
   bool _isAuthenticated = false;
   String? _userId;
   String? _token;
   String? _correo;
+  Usuario? _usuario; // Nuevo campo para almacenar datos del usuario
 
   final StorageService _storageService = StorageService();
 
@@ -16,6 +18,7 @@ class AuthService with ChangeNotifier {
   String? get userId => _userId;
   String? get token => _token;
   String? get correo => _correo;
+  Usuario? get usuario => _usuario; // Getter para los datos del usuario
 
   // Constructor que intenta recuperar datos de autenticación guardados
   AuthService() {
@@ -30,6 +33,12 @@ class AuthService with ChangeNotifier {
         _token = authData['token'];
         _userId = authData['userId'];
         _correo = authData['correo'];
+        
+        // Cargar datos del usuario si existen
+        if (authData['usuario'] != null) {
+          _usuario = Usuario.fromJson(authData['usuario']);
+        }
+        
         _isAuthenticated = true;
         notifyListeners();
       }
@@ -63,6 +72,38 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  // Obtener datos del usuario desde el endpoint /docentes/yo
+  Future<Usuario> _obtenerDatosUsuario() async {
+    try {
+      final url = '${AppConstants.apiBaseUrl}/docentes/yo';
+      
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      ).timeout(const Duration(seconds: 10), onTimeout: () {
+        throw Exception('Tiempo de espera agotado al obtener datos del usuario.');
+      });
+
+      if (response.statusCode == 200) {
+        final userData = json.decode(response.body);
+        return Usuario.fromJson(userData);
+      } else if (response.statusCode == 401) {
+        throw Exception('Token de acceso inválido o expirado');
+      } else {
+        throw Exception('Error al obtener datos del usuario (código ${response.statusCode})');
+      }
+    } on http.ClientException catch (e) {
+      throw Exception('Error de conexión al obtener datos del usuario: ${e.message}');
+    } on FormatException catch (_) {
+      throw Exception('Error en el formato de respuesta al obtener datos del usuario');
+    } catch (e) {
+      throw Exception('Error inesperado al obtener datos del usuario: ${e.toString()}');
+    }
+  }
+
   Future<void> login(String correo, String contrasena) async {
     try {
       final url = '${AppConstants.apiBaseUrl}/docentes/login';
@@ -84,18 +125,14 @@ class AuthService with ChangeNotifier {
         final responseData = json.decode(response.body);
         
         // Guardamos el token de la respuesta
-        // { "access_token": "token", "token_type": "bearer", "is_doc": true }
         _token = responseData['access_token'];
         if (_token == null) {
           throw Exception('El token de acceso no está presente en la respuesta');
         }
         
         // Extraer el ID del usuario desde el token JWT
-        // En este caso, el backend no devuelve un ID explícito,
-        // podemos usar el correo como identificador o decodificar el token
         _userId = _extractUserIdFromToken(_token!);
         _correo = correo;
-        _isAuthenticated = true;
         
         // Verificamos si es docente
         final isDoc = responseData['is_doc'] ?? false;
@@ -103,8 +140,25 @@ class AuthService with ChangeNotifier {
           throw Exception('El usuario no tiene permisos de docente');
         }
         
-        // Guardar datos para auto-login
-        await _storageService.saveAuthData(_userId!, _token!, _correo!);
+        // Obtener datos completos del usuario
+        try {
+          _usuario = await _obtenerDatosUsuario();
+        } catch (e) {
+          // Si no podemos obtener los datos del usuario, aún permitimos el login
+          // pero logueamos el error
+          print('Advertencia: No se pudieron obtener los datos del usuario: $e');
+          _usuario = null;
+        }
+        
+        _isAuthenticated = true;
+        
+        // Guardar datos para auto-login (incluyendo datos del usuario)
+        await _storageService.saveAuthData(
+          _userId!, 
+          _token!, 
+          _correo!,
+          usuario: _usuario, // Pasar los datos del usuario al storage
+        );
         
         notifyListeners();
       } else if (response.statusCode == 401 || response.statusCode == 403) {
@@ -133,11 +187,35 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  // Método para actualizar datos del usuario (útil si se necesita refrescar)
+  Future<void> actualizarDatosUsuario() async {
+    if (!_isAuthenticated || _token == null) {
+      throw Exception('Usuario no autenticado');
+    }
+
+    try {
+      _usuario = await _obtenerDatosUsuario();
+      
+      // Actualizar datos en storage
+      await _storageService.saveAuthData(
+        _userId!, 
+        _token!, 
+        _correo!,
+        usuario: _usuario,
+      );
+      
+      notifyListeners();
+    } catch (e) {
+      throw Exception('Error al actualizar datos del usuario: $e');
+    }
+  }
+
   Future<void> logout() async {
     _isAuthenticated = false;
     _userId = null;
     _token = null;
     _correo = null;
+    _usuario = null; // Limpiar datos del usuario
     
     // Eliminar datos guardados
     await _storageService.clearAuthData();

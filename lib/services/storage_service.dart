@@ -1,18 +1,25 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/usuario.dart';
 
 class StorageService {
   static const String authKey = 'auth_data';
   static const String configKey = 'app_config';
   
-  // Guardar datos de autenticación
-  Future<void> saveAuthData(String userId, String token, String correo) async {
+  // Guardar datos de autenticación (ahora incluye datos del usuario)
+  Future<void> saveAuthData(
+    String userId, 
+    String token, 
+    String correo, {
+    Usuario? usuario,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final authData = jsonEncode({
       'userId': userId,
       'token': token,
       'correo': correo,
       'timestamp': DateTime.now().toIso8601String(),
+      'usuario': usuario?.toJson(), // Guardar datos del usuario si existen
     });
     
     await prefs.setString(authKey, authData);

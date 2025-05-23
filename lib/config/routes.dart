@@ -5,6 +5,7 @@ import '../screens/asistencia/lista_asistencia_screen.dart';
 import '../screens/participacion/registro_participacion_screen.dart';
 import '../screens/estudiantes/lista_estudiantes_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
+import '../screens/profile/profile_screen.dart'; // Nueva importación
 
 class AppRoutes {
   static final routes = <String, WidgetBuilder>{
@@ -14,5 +15,6 @@ class AppRoutes {
     RegistroParticipacionScreen.routeName: (ctx) => const RegistroParticipacionScreen(),
     ListaEstudiantesScreen.routeName: (ctx) => const ListaEstudiantesScreen(),
     DashboardScreen.routeName: (ctx) => const DashboardScreen(),
+    ProfileScreen.routeName: (ctx) => const ProfileScreen(), // Nueva ruta
   };
 }

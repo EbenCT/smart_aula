@@ -6,6 +6,7 @@ import 'providers/periodo_provider.dart';
 import 'providers/curso_provider.dart';
 import 'providers/estudiantes_provider.dart';
 import 'providers/asistencia_provider.dart';
+import 'providers/theme_provider.dart'; // Nueva importación
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 
@@ -20,6 +21,9 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        // Provider para el manejo de temas
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        
         // Primero registramos el AuthService ya que otros dependen de él
         ChangeNotifierProvider(create: (_) => AuthService()),
         

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/theme_toggle_button.dart'; // Nueva importación
 import '../../providers/periodo_provider.dart';
 import '../../providers/curso_provider.dart';
 import '../seleccion/seleccion_periodo_curso_screen.dart';
@@ -83,6 +84,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          // Botón de cambio rápido de tema
+          const QuickThemeToggle(),
+          
+          // Botón de cambio de periodo/curso
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: () {
