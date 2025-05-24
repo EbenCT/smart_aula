@@ -225,6 +225,59 @@ class ApiService {
     }
   }
 
+  // ASISTENCIA - NUEVO ENDPOINT
+  Future<void> enviarAsistencias({
+    required int docenteId,
+    required int cursoId,
+    required int materiaId,
+    required DateTime fecha,
+    required List<Map<String, dynamic>> asistencias,
+  }) async {
+    try {
+      final fechaStr = '${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}';
+      
+      final endpoint = '/evaluaciones/asistencia?docente_id=$docenteId&curso_id=$cursoId&materia_id=$materiaId&fecha=$fechaStr';
+      
+      await post(endpoint, asistencias);
+    } catch (e) {
+      throw Exception('Error al enviar asistencias: $e');
+    }
+  }
+
+  // PARTICIPACIONES - NUEVO ENDPOINT
+  Future<void> enviarParticipaciones({
+    required int docenteId,
+    required int cursoId,
+    required int materiaId,
+    required int periodoId,
+    required DateTime fecha,
+    required List<Map<String, dynamic>> participaciones,
+  }) async {
+    try {
+      final fechaStr = '${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}';
+      
+      final endpoint = '/evaluaciones/participacion?docente_id=$docenteId&curso_id=$cursoId&materia_id=$materiaId&periodo_id=$periodoId&fecha=$fechaStr';
+      
+      await post(endpoint, participaciones);
+    } catch (e) {
+      throw Exception('Error al enviar participaciones: $e');
+    }
+  }
+
+  // Mapear estados de asistencia al formato del backend
+  String _mapearEstadoAsistencia(EstadoAsistencia estado) {
+    switch (estado) {
+      case EstadoAsistencia.presente:
+        return 'presente';
+      case EstadoAsistencia.ausente:
+        return 'falta';
+      case EstadoAsistencia.tardanza:
+        return 'tarde';
+      case EstadoAsistencia.justificado:
+        return 'justificacion';
+    }
+  }
+
   // ESTUDIANTES (método legacy para compatibilidad)
   Future<List<Estudiante>> getEstudiantesPorCurso(String cursoId) async {
     try {
@@ -237,7 +290,7 @@ class ApiService {
     }
   }
 
-  // ASISTENCIA (por ahora mantenemos la simulación)
+  // ASISTENCIA (por ahora mantenemos la simulación para compatibilidad)
   Future<List<Asistencia>> getAsistenciaPorCursoYFecha(
     String cursoId, 
     DateTime fecha
@@ -276,7 +329,7 @@ class ApiService {
     }
   }
 
-  // PARTICIPACIONES (por ahora mantenemos la simulación)
+  // PARTICIPACIONES (por ahora mantenemos la simulación para compatibilidad)
   Future<List<Participacion>> getParticipacionesPorEstudiante(
     String estudianteId,
     String cursoId,

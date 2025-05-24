@@ -40,7 +40,12 @@ void main() async {
           create: (context) => EstudiantesProvider(Provider.of<ApiService>(context, listen: false)),
           update: (context, apiService, previous) => previous ?? EstudiantesProvider(apiService),
         ),
-        ChangeNotifierProvider(create: (_) => AsistenciaProvider()),
+        
+        // AsistenciaProvider ahora también recibe ApiService
+        ChangeNotifierProxyProvider<ApiService, AsistenciaProvider>(
+          create: (context) => AsistenciaProvider(Provider.of<ApiService>(context, listen: false)),
+          update: (context, apiService, previous) => previous ?? AsistenciaProvider(apiService),
+        ),
       ],
       child: const AulaInteligenteApp(),
     ),

@@ -11,6 +11,8 @@ import '../../widgets/empty_state_widget.dart';
 import '../../widgets/summary_stats_widget.dart';
 import '../../widgets/date_selector_widget.dart';
 import '../../widgets/asistencia_item.dart';
+import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 
 class ListaAsistenciaScreen extends StatefulWidget {
   static const routeName = '/asistencia';
@@ -24,6 +26,7 @@ class ListaAsistenciaScreen extends StatefulWidget {
 class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
   DateTime _fechaSeleccionada = DateTime.now();
   bool _isLoading = false;
+  bool _isSaving = false;
   String _searchQuery = '';
   bool _localeInitialized = false;
   final TextEditingController _searchController = TextEditingController();
@@ -94,6 +97,19 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     Provider.of<AsistenciaProvider>(context, listen: false)
         .setFechaSeleccionada(newDate);
     _cargarAsistencia();
+  }
+
+  String _mapearEstadoAsistencia(EstadoAsistencia estado) {
+    switch (estado) {
+      case EstadoAsistencia.presente:
+        return 'presente';
+      case EstadoAsistencia.ausente:
+        return 'falta';
+      case EstadoAsistencia.tardanza:
+        return 'tarde';
+      case EstadoAsistencia.justificado:
+        return 'justificacion';
+    }
   }
 
   @override
@@ -266,11 +282,20 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
             ],
           ),
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: _guardarAsistencias,
-            icon: const Icon(Icons.save),
-            label: const Text('Guardar'),
+            onPressed: _isSaving ? null : () => _guardarAsistencias(context),
+            icon: _isSaving 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.save),
+            label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
             tooltip: 'Guardar asistencias',
-            backgroundColor: Theme.of(context).primaryColor,
+            backgroundColor: _isSaving ? Colors.grey : Theme.of(context).primaryColor,
             foregroundColor: Colors.white,
           ),
         );
@@ -362,16 +387,105 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     );
   }
 
-  void _guardarAsistencias() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Asistencias guardadas correctamente'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
-    );
+  Future<void> _guardarAsistencias(BuildContext context) async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
+      final estudiantesProvider = Provider.of<EstudiantesProvider>(context, listen: false);
+      final asistenciaProvider = Provider.of<AsistenciaProvider>(context, listen: false);
+      final apiService = Provider.of<ApiService>(context, listen: false);
+
+      // Verificar que tenemos la información necesaria
+      if (!cursoProvider.tieneSeleccionCompleta) {
+        throw Exception('No hay curso y materia seleccionados');
+      }
+
+      final docenteId = authService.usuario?.id;
+      if (docenteId == null) {
+        throw Exception('No se pudo obtener el ID del docente');
+      }
+
+      final cursoId = cursoProvider.cursoSeleccionado!.id;
+      final materiaId = cursoProvider.materiaSeleccionada!.id;
+      final estudiantes = estudiantesProvider.estudiantes;
+
+      if (estudiantes.isEmpty) {
+        throw Exception('No hay estudiantes para registrar asistencia');
+      }
+
+      // Obtener asistencias actuales
+      final asistencias = asistenciaProvider.asistenciasPorCursoYFecha(
+        materiaId.toString(), 
+        _fechaSeleccionada
+      );
+
+      // Preparar datos para el backend
+      List<Map<String, dynamic>> asistenciasData = [];
+
+      for (final estudiante in estudiantes) {
+        // Buscar la asistencia del estudiante o usar ausente por defecto
+        final asistencia = asistencias.firstWhere(
+          (a) => a.estudianteId == estudiante.id.toString(),
+          orElse: () => Asistencia(
+            id: '',
+            estudianteId: estudiante.id.toString(),
+            cursoId: materiaId.toString(),
+            fecha: _fechaSeleccionada,
+            estado: EstadoAsistencia.ausente,
+          ),
+        );
+
+        asistenciasData.add({
+          'id': estudiante.id,
+          'estado': _mapearEstadoAsistencia(asistencia.estado),
+        });
+      }
+
+      // Enviar al backend
+      await apiService.enviarAsistencias(
+        docenteId: docenteId,
+        cursoId: cursoId,
+        materiaId: materiaId,
+        fecha: _fechaSeleccionada,
+        asistencias: asistenciasData,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Asistencias guardadas correctamente'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar asistencias: ${error.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 }

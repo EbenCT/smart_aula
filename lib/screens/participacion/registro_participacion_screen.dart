@@ -12,6 +12,8 @@ import '../../widgets/summary_stats_widget.dart';
 import '../../widgets/date_selector_widget.dart';
 import '../../widgets/student_list_item_widget.dart';
 import '../../widgets/participation_type_selector_widget.dart';
+import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 
 class RegistroParticipacionScreen extends StatefulWidget {
   static const routeName = '/participacion';
@@ -28,6 +30,7 @@ class _RegistroParticipacionScreenState
   final DateTime _fecha = DateTime.now();
   String _searchQuery = '';
   bool _localeInitialized = false;
+  bool _isSaving = false;
   final TextEditingController _searchController = TextEditingController();
   
   // Para simulación, guardamos participaciones locales
@@ -217,11 +220,20 @@ class _RegistroParticipacionScreenState
             ],
           ),
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: _guardarParticipaciones,
-            icon: const Icon(Icons.save),
-            label: const Text('Guardar'),
+            onPressed: _isSaving ? null : () => _guardarParticipaciones(context),
+            icon: _isSaving 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.save),
+            label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
             tooltip: 'Guardar participaciones',
-            backgroundColor: Theme.of(context).primaryColor,
+            backgroundColor: _isSaving ? Colors.grey : Theme.of(context).primaryColor,
             foregroundColor: Colors.white,
           ),
         );
@@ -429,17 +441,126 @@ class _RegistroParticipacionScreenState
     });
   }
 
-  void _guardarParticipaciones() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Participaciones guardadas correctamente'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
-    );
+  Future<void> _guardarParticipaciones(BuildContext context) async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
+      final estudiantesProvider = Provider.of<EstudiantesProvider>(context, listen: false);
+      final apiService = Provider.of<ApiService>(context, listen: false);
+
+      // Verificar que tenemos la información necesaria
+      if (!cursoProvider.tieneSeleccionCompleta) {
+        throw Exception('No hay curso y materia seleccionados');
+      }
+
+      final docenteId = authService.usuario?.id;
+      if (docenteId == null) {
+        throw Exception('No se pudo obtener el ID del docente');
+      }
+
+      final cursoId = cursoProvider.cursoSeleccionado!.id;
+      final materiaId = cursoProvider.materiaSeleccionada!.id;
+      final estudiantes = estudiantesProvider.estudiantes;
+
+      if (estudiantes.isEmpty) {
+        throw Exception('No hay estudiantes para registrar participaciones');
+      }
+
+      // Preparar datos para el backend
+      List<Map<String, dynamic>> participacionesData = [];
+
+      for (final estudiante in estudiantes) {
+        // Obtener participaciones del estudiante para hoy
+        final participacionesEstudiante = _participaciones[estudiante.id.toString()] ?? [];
+        final participacionesHoy = participacionesEstudiante.where((p) => 
+          p.fecha.year == _fecha.year && 
+          p.fecha.month == _fecha.month && 
+          p.fecha.day == _fecha.day
+        ).toList();
+
+        if (participacionesHoy.isNotEmpty) {
+          // Calcular promedio de participaciones del día
+          final promedioValoracion = participacionesHoy.isNotEmpty 
+              ? (participacionesHoy.map((p) => p.valoracion).reduce((a, b) => a + b) / participacionesHoy.length).round()
+              : 0;
+
+          // Crear descripción combinada
+          final descripciones = participacionesHoy
+              .where((p) => p.descripcion != null && p.descripcion!.isNotEmpty)
+              .map((p) => p.descripcion!)
+              .toList();
+          
+          final descripcionCombinada = descripciones.isNotEmpty 
+              ? descripciones.join('; ')
+              : null;
+
+          participacionesData.add({
+            'id': estudiante.id,
+            'valor': promedioValoracion,
+            if (descripcionCombinada != null) 'descripcion': descripcionCombinada,
+          });
+        } else {
+          // Si no hay participaciones, enviar valor 0
+          participacionesData.add({
+            'id': estudiante.id,
+            'valor': 0,
+            'descripcion': 'No participó',
+          });
+        }
+      }
+
+      // Enviar al backend - usando periodo_id = 1 como valor por defecto
+      await apiService.enviarParticipaciones(
+        docenteId: docenteId,
+        cursoId: cursoId,
+        materiaId: materiaId,
+        periodoId: 1, // Valor por defecto, puedes ajustarlo según tu lógica
+        fecha: _fecha,
+        participaciones: participacionesData,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Participaciones guardadas correctamente'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+
+        // Limpiar participaciones después de guardar exitosamente
+        setState(() {
+          _participaciones.clear();
+        });
+      }
+
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar participaciones: ${error.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
   Icon _getIconForTipo(TipoParticipacion tipo, {double size = 20}) {
