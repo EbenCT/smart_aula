@@ -18,6 +18,7 @@ class AulaInteligenteApp extends StatelessWidget {
         return MaterialApp(
           title: 'Aula Inteligente',
           theme: AppThemes.lightTheme,
+          debugShowCheckedModeBanner: false,
           darkTheme: AppThemes.darkTheme,
           themeMode: themeProvider.themeMode, // Usar el tema del provider
           routes: AppRoutes.routes,

@@ -6,8 +6,7 @@ import 'providers/curso_provider.dart';
 import 'providers/estudiantes_provider.dart';
 import 'providers/asistencia_provider.dart';
 import 'providers/theme_provider.dart';
-import 'services/auth_service.dart';
-import 'services/api_service.dart';
+import 'services/services.dart';
 
 void main() async {
   // Asegurarse de que Flutter esté inicializado
@@ -41,11 +40,8 @@ void main() async {
           update: (context, apiService, previous) => previous ?? EstudiantesProvider(apiService),
         ),
         
-        // AsistenciaProvider ahora también recibe ApiService
-        ChangeNotifierProxyProvider<ApiService, AsistenciaProvider>(
-          create: (context) => AsistenciaProvider(Provider.of<ApiService>(context, listen: false)),
-          update: (context, apiService, previous) => previous ?? AsistenciaProvider(apiService),
-        ),
+        // AsistenciaProvider ahora es independiente
+        ChangeNotifierProvider(create: (_) => AsistenciaProvider()),
       ],
       child: const AulaInteligenteApp(),
     ),
