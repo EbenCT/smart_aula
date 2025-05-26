@@ -6,4 +6,5 @@ export 'curso_api_service.dart';
 export 'estudiante_api_service.dart';
 export 'evaluacion_api_service.dart';
 export 'prediccion_api_service.dart';
+export 'resumen_api_service.dart';
 export 'storage_service.dart';

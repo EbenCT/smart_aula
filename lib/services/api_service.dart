@@ -4,6 +4,7 @@ import './curso_api_service.dart';
 import './estudiante_api_service.dart';
 import './evaluacion_api_service.dart';
 import './prediccion_api_service.dart';
+import './resumen_api_service.dart';
 import '../models/curso.dart';
 import '../models/materia.dart';
 import '../models/estudiante.dart';
@@ -16,13 +17,22 @@ class ApiService {
   late final EstudianteApiService estudiantes;
   late final EvaluacionApiService evaluaciones;
   late final PrediccionApiService predicciones;
+  late final ResumenApiService resumen;
   
   ApiService(this._authService) {
     cursos = CursoApiService(_authService);
     estudiantes = EstudianteApiService(_authService);
     evaluaciones = EvaluacionApiService(_authService);
     predicciones = PrediccionApiService(_authService);
+    resumen = ResumenApiService(_authService);
   }
+
+  // RESUMEN DE MATERIA
+  Future<Map<String, dynamic>> getResumenMateriaCompleto(int cursoId, int materiaId) => 
+      resumen.getResumenMateriaCompleto(cursoId, materiaId);
+  
+  Future<Map<String, dynamic>> getResumenMateriaPorPeriodo(int cursoId, int materiaId, int periodoId) => 
+      resumen.getResumenMateriaPorPeriodo(cursoId, materiaId, periodoId);
 
   // Métodos de conveniencia para mantener compatibilidad con código existente
   
