@@ -5,6 +5,7 @@ import 'app.dart';
 import 'providers/curso_provider.dart';
 import 'providers/estudiantes_provider.dart';
 import 'providers/asistencia_provider.dart';
+import 'providers/participacion_provider.dart'; // Nueva importación
 import 'providers/resumen_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/services.dart';
@@ -45,10 +46,16 @@ void main() async {
           update: (context, apiService, previous) => previous ?? ResumenProvider(apiService),
         ),
         
-        // AsistenciaProvider ahora también depende del ApiService
+        // AsistenciaProvider depende del ApiService
         ChangeNotifierProxyProvider<ApiService, AsistenciaProvider>(
           create: (context) => AsistenciaProvider(Provider.of<ApiService>(context, listen: false)),
           update: (context, apiService, previous) => previous ?? AsistenciaProvider(apiService),
+        ),
+        
+        // ParticipacionProvider también depende del ApiService
+        ChangeNotifierProxyProvider<ApiService, ParticipacionProvider>(
+          create: (context) => ParticipacionProvider(Provider.of<ApiService>(context, listen: false)),
+          update: (context, apiService, previous) => previous ?? ParticipacionProvider(apiService),
         ),
       ],
       child: const AulaInteligenteApp(),

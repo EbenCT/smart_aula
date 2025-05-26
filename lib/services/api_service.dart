@@ -9,6 +9,7 @@ import '../models/curso.dart';
 import '../models/materia.dart';
 import '../models/estudiante.dart';
 import '../models/asistencia.dart';
+import '../models/participacion.dart';
 
 class ApiService {
   final AuthService _authService;
@@ -63,6 +64,30 @@ class ApiService {
     final cursoIdInt = int.tryParse(cursoId) ?? 0;
     return evaluaciones.getAsistenciasPorCursoYFecha(cursoIdInt, cursoIdInt, fecha);
   }
+
+  // PARTICIPACIONES - Métodos nuevos
+  Future<Map<String, dynamic>> getParticipacionesMasivas({
+    required int cursoId,
+    required int materiaId,
+    required DateTime fecha,
+  }) => evaluaciones.getParticipacionesMasivas(
+    cursoId: cursoId,
+    materiaId: materiaId,
+    fecha: fecha,
+  );
+
+  Future<List<Participacion>> getParticipacionesPorEstudiante(
+    int estudianteId,
+    int cursoId,
+    int materiaId,
+    {DateTime? fechaInicio, DateTime? fechaFin}
+  ) => evaluaciones.getParticipacionesPorEstudiante(
+    estudianteId,
+    cursoId,
+    materiaId,
+    fechaInicio: fechaInicio,
+    fechaFin: fechaFin,
+  );
   
   // EVALUACIONES
   Future<void> enviarAsistencias({
@@ -109,6 +134,11 @@ class ApiService {
 
   // Métodos legacy para compatibilidad
   Future<void> registrarAsistencia(Asistencia asistencia) async {
+    // Para compatibilidad - no hace nada por ahora
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
+
+  Future<void> registrarParticipacion(Participacion participacion) async {
     // Para compatibilidad - no hace nada por ahora
     await Future.delayed(const Duration(milliseconds: 100));
   }

@@ -82,6 +82,24 @@ class EvaluacionApiService extends BaseApiService {
     }
   }
 
+  // OBTENER PARTICIPACIONES MASIVAS POR FECHA, CURSO Y MATERIA
+  Future<Map<String, dynamic>> getParticipacionesMasivas({
+    required int cursoId,
+    required int materiaId,
+    required DateTime fecha,
+  }) async {
+    try {
+      final fechaStr = '${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}';
+      // tipo_evaluacion_id=4 corresponde a participaciones según tu endpoint
+      final endpoint = '/evaluaciones/evaluacion/masiva?fecha=$fechaStr&curso_id=$cursoId&materia_id=$materiaId&tipo_evaluacion_id=4';
+      
+      final response = await get(endpoint);
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      throw Exception('Error al obtener participaciones masivas: $e');
+    }
+  }
+
   Future<List<Participacion>> getParticipacionesPorEstudiante(
     int estudianteId,
     int cursoId,
