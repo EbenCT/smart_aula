@@ -4,14 +4,14 @@ import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import '../../providers/curso_provider.dart';
 import '../../providers/estudiantes_provider.dart';
-import '../../models/participacion.dart';
+import '../../models/participacion.dart'; // Usando el archivo modificado
 import '../../models/estudiante.dart';
 import '../../widgets/search_header_widget.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../../widgets/summary_stats_widget.dart';
 import '../../widgets/date_selector_widget.dart';
 import '../../widgets/student_list_item_widget.dart';
-import '../../widgets/participation_type_selector_widget.dart';
+import '../../widgets/participation_type_selector_widget.dart'; // Usando el archivo modificado
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 
@@ -33,7 +33,7 @@ class _RegistroParticipacionScreenState
   bool _isSaving = false;
   final TextEditingController _searchController = TextEditingController();
   
-  // Para simulación, guardamos participaciones locales
+  // Para almacenar participaciones locales
   final Map<String, List<Participacion>> _participaciones = {};
   
   @override
@@ -244,38 +244,64 @@ class _RegistroParticipacionScreenState
   Widget _buildParticipacionesSummary(int totalEstudiantes) {
     // Calcular estadísticas de participación
     int totalParticipaciones = 0;
-    Map<TipoParticipacion, int> participacionesPorTipo = {};
-    
-    for (var tipo in TipoParticipacion.values) {
-      participacionesPorTipo[tipo] = 0;
-    }
-    
+    int puntajeTotal = 0;
+    int estudiantesConParticipacion = 0;
+
     for (var participacionesEstudiante in _participaciones.values) {
-      totalParticipaciones += participacionesEstudiante.length;
-      for (var participacion in participacionesEstudiante) {
-        participacionesPorTipo[participacion.tipo] = 
-            (participacionesPorTipo[participacion.tipo] ?? 0) + 1;
+      if (participacionesEstudiante.isNotEmpty) {
+        estudiantesConParticipacion++;
+        totalParticipaciones += participacionesEstudiante.length;
+        for (var participacion in participacionesEstudiante) {
+          puntajeTotal += participacion.valoracion;
+        }
       }
     }
 
-    final stats = TipoParticipacion.values.map((tipo) => SummaryStat(
-      title: _getTipoText(tipo),
-      count: participacionesPorTipo[tipo] ?? 0,
-      color: _getColorForTipo(tipo),
-    )).toList();
+    final promedioParticipaciones = totalEstudiantes > 0 
+        ? (totalParticipaciones / totalEstudiantes) 
+        : 0.0;
+    
+    final promedioPuntaje = totalParticipaciones > 0 
+        ? (puntajeTotal / totalParticipaciones) 
+        : 0.0;
+
+    final stats = [
+      SummaryStat(title: 'Total', count: totalParticipaciones, color: Theme.of(context).primaryColor),
+      SummaryStat(title: 'Estudiantes', count: estudiantesConParticipacion, color: Colors.blue),
+      SummaryStat(title: 'Sin participar', count: totalEstudiantes - estudiantesConParticipacion, color: Colors.orange),
+    ];
 
     return SummaryStatsWidget(
       title: 'Resumen de Participaciones',
       stats: stats,
-      additionalInfo: Row(
+      additionalInfo: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text(
-              'Promedio: ${totalEstudiantes > 0 ? (totalParticipaciones / totalEstudiantes).toStringAsFixed(1) : 0} participaciones por estudiante',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.bold,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Promedio: ${promedioParticipaciones.toStringAsFixed(1)} participaciones por estudiante',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-            ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Puntaje promedio: ${promedioPuntaje.toStringAsFixed(0)}/100',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: _getColorForPuntaje(promedioPuntaje.toInt()),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -305,7 +331,7 @@ class _RegistroParticipacionScreenState
           bottomWidget: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Selector de tipos de participación
+              // Botón para agregar participación
               ParticipationTypeSelectorWidget(
                 estudianteId: estudiante.id.toString(),
                 cursoId: materiaId,
@@ -359,15 +385,26 @@ class _RegistroParticipacionScreenState
         color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: _getColorForTipo(participacion.tipo).withOpacity(0.3),
+          color: participacion.getColorIndicador().withOpacity(0.3),
         ),
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: _getColorForTipo(participacion.tipo).withOpacity(0.2),
-            child: _getIconForTipo(participacion.tipo, size: 16),
+          // Indicador de puntaje
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: participacion.getColorIndicador(),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '${participacion.valoracion}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -375,30 +412,24 @@ class _RegistroParticipacionScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _getTipoText(participacion.tipo),
+                  participacion.descripcion ?? 'Participación',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  participacion.textoValoracion,
+                  style: TextStyle(
+                    color: participacion.getColorIndicador(),
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (participacion.descripcion != null && participacion.descripcion!.isNotEmpty)
-                  Text(
-                    participacion.descripcion!,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
               ],
             ),
           ),
-          Text(
-            'Valor: ${participacion.valoracion}',
-            style: TextStyle(
-              color: _getColorForValoracion(participacion.valoracion),
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
             onPressed: () {
@@ -417,13 +448,10 @@ class _RegistroParticipacionScreenState
     String descripcion,
     int valoracion,
   ) {
-    final participacion = Participacion(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+    final participacion = Participacion.nueva(
       estudianteId: estudianteId,
       cursoId: cursoId,
-      fecha: DateTime.now(),
-      tipo: tipo,
-      descripcion: descripcion.isNotEmpty ? descripcion : null,
+      descripcion: descripcion,
       valoracion: valoracion,
     );
 
@@ -484,24 +512,24 @@ class _RegistroParticipacionScreenState
 
         if (participacionesHoy.isNotEmpty) {
           // Calcular promedio de participaciones del día
-          final promedioValoracion = participacionesHoy.isNotEmpty 
+          final promedioPuntaje = participacionesHoy.isNotEmpty 
               ? (participacionesHoy.map((p) => p.valoracion).reduce((a, b) => a + b) / participacionesHoy.length).round()
               : 0;
 
           // Crear descripción combinada
           final descripciones = participacionesHoy
-              .where((p) => p.descripcion != null && p.descripcion!.isNotEmpty)
-              .map((p) => p.descripcion!)
+              .map((p) => p.descripcion ?? 'Participación')
+              .toSet() // Eliminar duplicados
               .toList();
           
-          final descripcionCombinada = descripciones.isNotEmpty 
-              ? descripciones.join('; ')
-              : null;
+          final descripcionCombinada = descripciones.length == 1 && descripciones.first == 'Participación'
+              ? 'Participación'
+              : descripciones.join('; ');
 
           participacionesData.add({
             'id': estudiante.id,
-            'valor': promedioValoracion,
-            if (descripcionCombinada != null) 'descripcion': descripcionCombinada,
+            'valor': promedioPuntaje,
+            'descripcion': descripcionCombinada,
           });
         } else {
           // Si no hay participaciones, enviar valor 0
@@ -563,52 +591,31 @@ class _RegistroParticipacionScreenState
     }
   }
 
-  Icon _getIconForTipo(TipoParticipacion tipo, {double size = 20}) {
-    switch (tipo) {
-      case TipoParticipacion.pregunta:
-        return Icon(Icons.help_outline, color: Colors.blue, size: size);
-      case TipoParticipacion.respuesta:
-        return Icon(Icons.check_circle_outline, color: Colors.green, size: size);
-      case TipoParticipacion.comentario:
-        return Icon(Icons.comment, color: Colors.orange, size: size);
-      case TipoParticipacion.presentacion:
-        return Icon(Icons.slideshow, color: Colors.purple, size: size);
+  Color _getColorForPuntaje(int puntaje) {
+    if (puntaje >= 85) {
+      return Colors.green;
+    } else if (puntaje >= 70) {
+      return Colors.lightGreen;
+    } else if (puntaje >= 50) {
+      return Colors.amber;
+    } else if (puntaje >= 25) {
+      return Colors.orange;
+    } else {
+      return Colors.red;
     }
   }
 
-  String _getTipoText(TipoParticipacion tipo) {
-    switch (tipo) {
-      case TipoParticipacion.pregunta:
-        return 'Pregunta';
-      case TipoParticipacion.respuesta:
-        return 'Respuesta';
-      case TipoParticipacion.comentario:
-        return 'Comentario';
-      case TipoParticipacion.presentacion:
-        return 'Presentación';
-    }
-  }
-  
-  Color _getColorForTipo(TipoParticipacion tipo) {
-    switch (tipo) {
-      case TipoParticipacion.pregunta:
-        return Colors.blue;
-      case TipoParticipacion.respuesta:
-        return Colors.green;
-      case TipoParticipacion.comentario:
-        return Colors.orange;
-      case TipoParticipacion.presentacion:
-        return Colors.purple;
-    }
-  }
-  
-  Color _getColorForValoracion(int valoracion) {
-    if (valoracion >= 4) {
-      return Colors.green;
-    } else if (valoracion >= 3) {
-      return Colors.amber;
+  String _getTextForPuntaje(int puntaje) {
+    if (puntaje >= 85) {
+      return 'Excelente';
+    } else if (puntaje >= 70) {
+      return 'Muy Bueno';
+    } else if (puntaje >= 50) {
+      return 'Bueno';
+    } else if (puntaje >= 25) {
+      return 'Regular';
     } else {
-      return Colors.orange;
+      return 'Básico';
     }
   }
 }

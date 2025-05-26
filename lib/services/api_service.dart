@@ -44,7 +44,17 @@ class ApiService {
   Future<List<Estudiante>> getEstudiantesPorMateria(int cursoId, int materiaId) => 
       estudiantes.getEstudiantesPorMateria(cursoId, materiaId);
   
-  // ASISTENCIAS - Método que faltaba
+  // ASISTENCIAS - Métodos actualizados
+  Future<Map<String, dynamic>> getAsistenciasMasivas({
+    required int cursoId,
+    required int materiaId,
+    required DateTime fecha,
+  }) => evaluaciones.getAsistenciasMasivas(
+    cursoId: cursoId,
+    materiaId: materiaId,
+    fecha: fecha,
+  );
+
   Future<List<Asistencia>> getAsistenciaPorCursoYFecha(
     String cursoId, 
     DateTime fecha
@@ -88,6 +98,14 @@ class ApiService {
   // Método para mapear estados de asistencia
   String mapearEstadoAsistencia(dynamic estado) => 
       evaluaciones.mapearEstadoAsistencia(estado);
+
+  // Método para mapear estado desde el backend
+  EstadoAsistencia mapearEstadoDesdeBackend(dynamic valor) =>
+      evaluaciones.mapearEstadoDesdeBackend(valor);
+
+  // Método para mapear estado a valor numérico
+  int mapearEstadoAValor(EstadoAsistencia estado) =>
+      evaluaciones.mapearEstadoAValor(estado);
 
   // Métodos legacy para compatibilidad
   Future<void> registrarAsistencia(Asistencia asistencia) async {

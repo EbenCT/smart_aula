@@ -45,8 +45,11 @@ void main() async {
           update: (context, apiService, previous) => previous ?? ResumenProvider(apiService),
         ),
         
-        // AsistenciaProvider ahora es independiente
-        ChangeNotifierProvider(create: (_) => AsistenciaProvider()),
+        // AsistenciaProvider ahora también depende del ApiService
+        ChangeNotifierProxyProvider<ApiService, AsistenciaProvider>(
+          create: (context) => AsistenciaProvider(Provider.of<ApiService>(context, listen: false)),
+          update: (context, apiService, previous) => previous ?? AsistenciaProvider(apiService),
+        ),
       ],
       child: const AulaInteligenteApp(),
     ),

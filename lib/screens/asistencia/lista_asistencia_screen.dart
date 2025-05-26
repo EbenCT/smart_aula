@@ -58,19 +58,31 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
   Future<void> _cargarAsistencia() async {
     if (!mounted) return;
 
+    final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
+    final asistenciaProvider = Provider.of<AsistenciaProvider>(context, listen: false);
+    
+    if (!cursoProvider.tieneSeleccionCompleta) return;
+
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final asistenciaProvider = Provider.of<AsistenciaProvider>(context, listen: false);
-      final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
+      final cursoId = cursoProvider.cursoSeleccionado!.id;
+      final materiaId = cursoProvider.materiaSeleccionada!.id;
       
-      if (cursoProvider.tieneSeleccionCompleta) {
-        // Usar el ID de la materia como cursoId para mantener compatibilidad
-        asistenciaProvider.setCursoId(cursoProvider.materiaSeleccionada!.id.toString());
-        asistenciaProvider.setFechaSeleccionada(_fechaSeleccionada);
-      }
+      // Configurar el provider con los datos actuales
+      asistenciaProvider.setCursoId(materiaId.toString());
+      asistenciaProvider.setMateriaId(materiaId);
+      asistenciaProvider.setFechaSeleccionada(_fechaSeleccionada);
+      
+      // Cargar asistencias desde el backend para la fecha seleccionada
+      await asistenciaProvider.cargarAsistenciasDesdeBackend(
+        cursoId: cursoId,
+        materiaId: materiaId,
+        fecha: _fechaSeleccionada,
+      );
+      
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -94,8 +106,6 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     setState(() {
       _fechaSeleccionada = newDate;
     });
-    Provider.of<AsistenciaProvider>(context, listen: false)
-        .setFechaSeleccionada(newDate);
     _cargarAsistencia();
   }
 
@@ -243,6 +253,34 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
                               ],
                             ),
                           ),
+                          // Indicador de datos cargados
+                          if (asistencias.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.cloud_download,
+                                    size: 14,
+                                    color: Colors.green.shade700,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Cargado',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.green.shade700,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -263,8 +301,17 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
               
               // Lista de estudiantes
               Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
+                child: _isLoading || asistenciaProvider.isLoading
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('Cargando asistencias...'),
+                          ],
+                        ),
+                      )
                     : estudiantes.isEmpty
                         ? const EmptyStateWidget(
                             icon: Icons.people_outline,
@@ -274,7 +321,7 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
                         : RefreshIndicator(
                             onRefresh: () async {
                               await estudiantesProvider.recargarEstudiantes();
-                              _cargarAsistencia();
+                              await _cargarAsistencia();
                             },
                             child: _buildEstudiantesList(estudiantes, asistencias, materiaSeleccionada.id.toString()),
                           ),
@@ -309,10 +356,13 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     int ausentes = asistencias.where((a) => a.estado == EstadoAsistencia.ausente).length;
     int justificados = asistencias.where((a) => a.estado == EstadoAsistencia.justificado).length;
 
+    // Calcular ausentes reales (estudiantes sin registro de asistencia)
+    int ausentesReales = totalEstudiantes - asistencias.length + ausentes;
+
     final stats = [
       SummaryStat(title: 'Presentes', count: presentes, color: Colors.green),
       SummaryStat(title: 'Tardes', count: tardanzas, color: Colors.amber),
-      SummaryStat(title: 'Ausentes', count: ausentes, color: Colors.red),
+      SummaryStat(title: 'Ausentes', count: ausentesReales, color: Colors.red),
       SummaryStat(title: 'Justificados', count: justificados, color: Colors.blue),
     ];
 
@@ -339,6 +389,14 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
+          if (asistencias.isNotEmpty)
+            Text(
+              'Datos cargados desde el servidor',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.green.shade700,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
         ],
       ),
     );
@@ -356,15 +414,19 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
       itemCount: estudiantes.length,
       itemBuilder: (ctx, index) {
         final estudiante = estudiantes[index];
-        final asistencia = asistencias.firstWhere(
-          (a) => a.estudianteId == estudiante.id.toString(),
-          orElse: () => Asistencia(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            estudianteId: estudiante.id.toString(),
-            cursoId: materiaId,
-            fecha: _fechaSeleccionada,
-            estado: EstadoAsistencia.ausente,
-          ),
+        
+        // Buscar asistencia existente o crear una por defecto
+        final asistenciaExistente = asistenciaProvider.getAsistenciaEstudiante(
+          estudiante.id.toString(), 
+          _fechaSeleccionada
+        );
+        
+        final asistencia = asistenciaExistente ?? Asistencia(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          estudianteId: estudiante.id.toString(),
+          cursoId: materiaId,
+          fecha: _fechaSeleccionada,
+          estado: EstadoAsistencia.ausente,
         );
         
         return AsistenciaItem(
@@ -417,31 +479,21 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
         throw Exception('No hay estudiantes para registrar asistencia');
       }
 
-      // Obtener asistencias actuales
-      final asistencias = asistenciaProvider.asistenciasPorCursoYFecha(
-        materiaId.toString(), 
-        _fechaSeleccionada
-      );
-
       // Preparar datos para el backend
       List<Map<String, dynamic>> asistenciasData = [];
 
       for (final estudiante in estudiantes) {
         // Buscar la asistencia del estudiante o usar ausente por defecto
-        final asistencia = asistencias.firstWhere(
-          (a) => a.estudianteId == estudiante.id.toString(),
-          orElse: () => Asistencia(
-            id: '',
-            estudianteId: estudiante.id.toString(),
-            cursoId: materiaId.toString(),
-            fecha: _fechaSeleccionada,
-            estado: EstadoAsistencia.ausente,
-          ),
+        final asistencia = asistenciaProvider.getAsistenciaEstudiante(
+          estudiante.id.toString(),
+          _fechaSeleccionada,
         );
+
+        final estadoFinal = asistencia?.estado ?? EstadoAsistencia.ausente;
 
         asistenciasData.add({
           'id': estudiante.id,
-          'estado': _mapearEstadoAsistencia(asistencia.estado),
+          'estado': _mapearEstadoAsistencia(estadoFinal),
         });
       }
 
@@ -465,6 +517,9 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
             ),
           ),
         );
+
+        // Recargar asistencias después de guardar para sincronizar con el servidor
+        await _cargarAsistencia();
       }
 
     } catch (error) {

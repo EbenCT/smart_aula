@@ -26,6 +26,23 @@ class EvaluacionApiService extends BaseApiService {
     }
   }
 
+  // OBTENER ASISTENCIAS MASIVAS POR FECHA, CURSO Y MATERIA
+  Future<Map<String, dynamic>> getAsistenciasMasivas({
+    required int cursoId,
+    required int materiaId,
+    required DateTime fecha,
+  }) async {
+    try {
+      final fechaStr = '${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}';
+      final endpoint = '/evaluaciones/asistencia/masiva?fecha=$fechaStr&curso_id=$cursoId&materia_id=$materiaId';
+      
+      final response = await get(endpoint);
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      throw Exception('Error al obtener asistencias masivas: $e');
+    }
+  }
+
   Future<List<Asistencia>> getAsistenciasPorCursoYFecha(
     int cursoId,
     int materiaId,
@@ -96,6 +113,25 @@ class EvaluacionApiService extends BaseApiService {
     }
   }
 
+  // Mapear estados de asistencia del backend al modelo local
+  EstadoAsistencia mapearEstadoDesdeBackend(dynamic valor) {
+    // Convertir a int si viene como double
+    final valorInt = valor is double ? valor.toInt() : valor as int;
+    
+    switch (valorInt) {
+      case 100:
+        return EstadoAsistencia.presente;
+      case 50:
+        return EstadoAsistencia.tardanza;
+      case 0:
+        return EstadoAsistencia.ausente;
+      case 75:
+        return EstadoAsistencia.justificado;
+      default:
+        return EstadoAsistencia.ausente;
+    }
+  }
+
   // Mapear estados de asistencia al formato del backend
   String mapearEstadoAsistencia(EstadoAsistencia estado) {
     switch (estado) {
@@ -107,6 +143,20 @@ class EvaluacionApiService extends BaseApiService {
         return 'tarde';
       case EstadoAsistencia.justificado:
         return 'justificacion';
+    }
+  }
+
+  // Mapear estado de asistencia a valor numérico para el backend
+  int mapearEstadoAValor(EstadoAsistencia estado) {
+    switch (estado) {
+      case EstadoAsistencia.presente:
+        return 100;
+      case EstadoAsistencia.tardanza:
+        return 50;
+      case EstadoAsistencia.ausente:
+        return 0;
+      case EstadoAsistencia.justificado:
+        return 75;
     }
   }
 }
