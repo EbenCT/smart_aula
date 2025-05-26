@@ -5,8 +5,9 @@ import 'app.dart';
 import 'providers/curso_provider.dart';
 import 'providers/estudiantes_provider.dart';
 import 'providers/asistencia_provider.dart';
-import 'providers/participacion_provider.dart'; // Nueva importación
+import 'providers/participacion_provider.dart';
 import 'providers/resumen_provider.dart';
+import 'providers/resumen_estudiante_provider.dart'; // Nueva importación
 import 'providers/theme_provider.dart';
 import 'services/services.dart';
 
@@ -44,6 +45,12 @@ void main() async {
         ChangeNotifierProxyProvider<ApiService, ResumenProvider>(
           create: (context) => ResumenProvider(Provider.of<ApiService>(context, listen: false)),
           update: (context, apiService, previous) => previous ?? ResumenProvider(apiService),
+        ),
+        
+        // Nuevo provider para resumen de estudiantes
+        ChangeNotifierProxyProvider<ApiService, ResumenEstudianteProvider>(
+          create: (context) => ResumenEstudianteProvider(Provider.of<ApiService>(context, listen: false)),
+          update: (context, apiService, previous) => previous ?? ResumenEstudianteProvider(apiService),
         ),
         
         // AsistenciaProvider depende del ApiService

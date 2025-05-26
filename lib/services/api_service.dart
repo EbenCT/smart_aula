@@ -5,6 +5,7 @@ import './estudiante_api_service.dart';
 import './evaluacion_api_service.dart';
 import './prediccion_api_service.dart';
 import './resumen_api_service.dart';
+import './resumen_estudiante_api_service.dart';
 import '../models/curso.dart';
 import '../models/materia.dart';
 import '../models/estudiante.dart';
@@ -19,6 +20,7 @@ class ApiService {
   late final EvaluacionApiService evaluaciones;
   late final PrediccionApiService predicciones;
   late final ResumenApiService resumen;
+  late final ResumenEstudianteApiService resumenEstudiante;
   
   ApiService(this._authService) {
     cursos = CursoApiService(_authService);
@@ -26,6 +28,7 @@ class ApiService {
     evaluaciones = EvaluacionApiService(_authService);
     predicciones = PrediccionApiService(_authService);
     resumen = ResumenApiService(_authService);
+    resumenEstudiante = ResumenEstudianteApiService(_authService);
   }
 
   // RESUMEN DE MATERIA
@@ -34,6 +37,17 @@ class ApiService {
   
   Future<Map<String, dynamic>> getResumenMateriaPorPeriodo(int cursoId, int materiaId, int periodoId) => 
       resumen.getResumenMateriaPorPeriodo(cursoId, materiaId, periodoId);
+
+  // RESUMEN POR ESTUDIANTE
+  Future<Map<String, dynamic>> getResumenPorEstudiante({
+    required int estudianteId,
+    required int materiaId,
+    int? periodoId,
+  }) => resumenEstudiante.getResumenPorEstudiante(
+    estudianteId: estudianteId,
+    materiaId: materiaId,
+    periodoId: periodoId,
+  );
 
   // Métodos de conveniencia para mantener compatibilidad con código existente
   
@@ -44,6 +58,12 @@ class ApiService {
   // ESTUDIANTES
   Future<List<Estudiante>> getEstudiantesPorMateria(int cursoId, int materiaId) => 
       estudiantes.getEstudiantesPorMateria(cursoId, materiaId);
+  
+  Future<Estudiante> getEstudiantePorId(int estudianteId) => 
+      estudiantes.getEstudiantePorId(estudianteId);
+
+  Future<void> actualizarEstudiante(int estudianteId, Map<String, dynamic> datos) => 
+      estudiantes.actualizarEstudiante(estudianteId, datos);
   
   // ASISTENCIAS - Métodos actualizados
   Future<Map<String, dynamic>> getAsistenciasMasivas({
@@ -64,6 +84,12 @@ class ApiService {
     final cursoIdInt = int.tryParse(cursoId) ?? 0;
     return evaluaciones.getAsistenciasPorCursoYFecha(cursoIdInt, cursoIdInt, fecha);
   }
+
+  Future<List<Asistencia>> getAsistenciasPorCursoYFecha(
+    int cursoId,
+    int materiaId,
+    DateTime fecha,
+  ) => evaluaciones.getAsistenciasPorCursoYFecha(cursoId, materiaId, fecha);
 
   // PARTICIPACIONES - Métodos nuevos
   Future<Map<String, dynamic>> getParticipacionesMasivas({
@@ -120,19 +146,81 @@ class ApiService {
     participaciones: participaciones,
   );
 
-  // Método para mapear estados de asistencia
+  // PREDICCIONES
+  Future<List<Map<String, dynamic>>> getPrediccionesPorCursoYMateria(
+    int cursoId, 
+    int materiaId,
+    {int? periodoId}
+  ) async {
+    try {
+      final prediccionesList = await predicciones.getPrediccionesPorCursoYMateria(cursoId, materiaId, periodoId: periodoId);
+      return prediccionesList.map((p) => p.toJson()).toList();
+    } catch (e) {
+      throw Exception('Error al obtener predicciones: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getPrediccionEstudiante(
+    int estudianteId, 
+    int cursoId, 
+    int materiaId,
+    {int? periodoId}
+  ) async {
+    try {
+      final prediccion = await predicciones.getPrediccionEstudiante(estudianteId, cursoId, materiaId, periodoId: periodoId);
+      return prediccion?.toJson();
+    } catch (e) {
+      throw Exception('Error al obtener predicción del estudiante: $e');
+    }
+  }
+
+  Future<void> generarPredicciones(
+    int cursoId, 
+    int materiaId,
+    {int? periodoId}
+  ) => predicciones.generarPredicciones(cursoId, materiaId, periodoId: periodoId);
+
+  Future<Map<String, dynamic>> getEstadisticasDashboard(
+    int cursoId, 
+    int materiaId,
+    {int? periodoId}
+  ) => predicciones.getEstadisticasDashboard(cursoId, materiaId, periodoId: periodoId);
+
+  Future<List<Map<String, dynamic>>> getEstudiantesEnRiesgo(
+    int cursoId, 
+    int materiaId,
+    {int? periodoId}
+  ) => predicciones.getEstudiantesEnRiesgo(cursoId, materiaId, periodoId: periodoId);
+
+  Future<Map<String, int>> getDistribucionRendimiento(
+    int cursoId, 
+    int materiaId,
+    {int? periodoId}
+  ) => predicciones.getDistribucionRendimiento(cursoId, materiaId, periodoId: periodoId);
+
+  Future<List<Map<String, dynamic>>> getTendenciasAsistencia(
+    int cursoId, 
+    int materiaId,
+    {int? periodoId, DateTime? fechaInicio, DateTime? fechaFin}
+  ) => predicciones.getTendenciasAsistencia(
+    cursoId, 
+    materiaId, 
+    periodoId: periodoId,
+    fechaInicio: fechaInicio,
+    fechaFin: fechaFin,
+  );
+
+  // Métodos para mapear estados de asistencia
   String mapearEstadoAsistencia(dynamic estado) => 
       evaluaciones.mapearEstadoAsistencia(estado);
 
-  // Método para mapear estado desde el backend
   EstadoAsistencia mapearEstadoDesdeBackend(dynamic valor) =>
       evaluaciones.mapearEstadoDesdeBackend(valor);
 
-  // Método para mapear estado a valor numérico
   int mapearEstadoAValor(EstadoAsistencia estado) =>
       evaluaciones.mapearEstadoAValor(estado);
 
-  // Métodos legacy para compatibilidad
+  // Métodos legacy para compatibilidad (mantienen la interfaz anterior)
   Future<void> registrarAsistencia(Asistencia asistencia) async {
     // Para compatibilidad - no hace nada por ahora
     await Future.delayed(const Duration(milliseconds: 100));

@@ -1,15 +1,15 @@
-// ignore_for_file: unused_local_variable
-
+// lib/screens/estudiantes/detalle_estudiante_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../../providers/estudiantes_provider.dart';
+import '../../providers/estudiantes_provider.dart';
+import '../../providers/curso_provider.dart';
+import '../../providers/resumen_estudiante_provider.dart';
+import '../../models/resumen_estudiante.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/card_container_widget.dart';
-import '../../widgets/prediction_indicator_widget.dart';
-import '../../../models/prediccion.dart';
 
-class DetalleEstudianteScreen extends StatelessWidget {
+class DetalleEstudianteScreen extends StatefulWidget {
   final String estudianteId;
 
   const DetalleEstudianteScreen({
@@ -18,10 +18,67 @@ class DetalleEstudianteScreen extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  _DetalleEstudianteScreenState createState() => _DetalleEstudianteScreenState();
+}
+
+class _DetalleEstudianteScreenState extends State<DetalleEstudianteScreen> {
+  ResumenEstudiante? _resumenEstudiante;
+  bool _isLoadingResumen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargarResumenEstudiante();
+    });
+  }
+
+  Future<void> _cargarResumenEstudiante() async {
+    final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
+    final resumenProvider = Provider.of<ResumenEstudianteProvider>(context, listen: false);
+    
+    if (!cursoProvider.tieneSeleccionCompleta) return;
+
+    setState(() {
+      _isLoadingResumen = true;
+    });
+
+    try {
+      final resumen = await resumenProvider.getResumenEstudiante(
+        estudianteId: int.parse(widget.estudianteId),
+        materiaId: cursoProvider.materiaSeleccionada!.id,
+        periodoId: 1, // Puedes ajustar esto según tu lógica
+        forceRefresh: true,
+      );
+
+      if (mounted) {
+        setState(() {
+          _resumenEstudiante = resumen;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar resumen: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingResumen = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Consumer<EstudiantesProvider>(
-      builder: (context, estudiantesProvider, child) {
-        final estudiante = estudiantesProvider.getEstudiantePorId(int.parse(estudianteId));
+    return Consumer2<EstudiantesProvider, CursoProvider>(
+      builder: (context, estudiantesProvider, cursoProvider, child) {
+        final estudiante = estudiantesProvider.getEstudiantePorId(int.parse(widget.estudianteId));
 
         if (estudiante == null) {
           return Scaffold(
@@ -56,6 +113,7 @@ class DetalleEstudianteScreen extends StatelessWidget {
                 icon: const Icon(Icons.refresh),
                 onPressed: () {
                   estudiantesProvider.recargarEstudiantes();
+                  _cargarResumenEstudiante();
                 },
               ),
             ],
@@ -72,15 +130,17 @@ class DetalleEstudianteScreen extends StatelessWidget {
                 // Información del tutor
                 _buildInformacionTutorCard(context, estudiante),
                 
-                // Tarjeta de predicción
-                if (estudiante.prediccion != null)
-                  _buildPrediccionCard(context, estudiante),
+                // Resumen académico (desde el endpoint)
+                if (_resumenEstudiante != null)
+                  _buildResumenAcademicoCard(context, _resumenEstudiante!),
                 
-                // Tarjeta de rendimiento académico
-                _buildRendimientoCard(context, estudiante),
+                // Estado de carga del resumen
+                if (_isLoadingResumen)
+                  _buildLoadingResumenCard(context),
                 
-                // Tarjeta de asistencia y participación
-                _buildAsistenciaParticipacionCard(context, estudiante),
+                // Información de asistencia detallada
+                if (_resumenEstudiante?.tieneAsistencia == true)
+                  _buildAsistenciaDetalladaCard(context, _resumenEstudiante!.asistencia!),
               ],
             ),
           ),
@@ -232,7 +292,6 @@ class DetalleEstudianteScreen extends StatelessWidget {
             estudiante.telefonoTutor,
             Icons.phone,
             onTap: () {
-              // Aquí se podría implementar la funcionalidad de llamar
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Llamar a ${estudiante.telefonoTutor}'),
@@ -249,12 +308,7 @@ class DetalleEstudianteScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPrediccionCard(BuildContext context, estudiante) {
-    final nivel = NivelRendimiento.values.firstWhere(
-      (e) => e.toString().split('.').last == estudiante.prediccion!['nivel'],
-      orElse: () => NivelRendimiento.medio,
-    );
-
+  Widget _buildResumenAcademicoCard(BuildContext context, ResumenEstudiante resumen) {
     return CardContainerWidget(
       margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Column(
@@ -268,7 +322,7 @@ class DetalleEstudianteScreen extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Predicción de Rendimiento',
+                'Resumen Académico',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -278,55 +332,202 @@ class DetalleEstudianteScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              PredictionIndicatorWidget(
-                prediccion: estudiante.prediccion,
-                size: 80,
-                showLabel: true,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Factores Influyentes:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...List<String>.from(estudiante.prediccion!['factoresInfluyentes'])
-                        .map<Widget>((factor) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4.0),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.arrow_right, size: 16),
-                                  Expanded(child: Text(factor)),
-                                ],
-                              ),
-                            ))
-                        .toList(),
-                  ],
+          
+          // Promedio general
+          if (resumen.tieneEvaluaciones) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _getColorForNota(resumen.promedioGeneral).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _getColorForNota(resumen.promedioGeneral).withOpacity(0.3),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'La predicción se basa en el historial académico, asistencia y participación del estudiante.',
-            style: TextStyle(
-              fontStyle: FontStyle.italic,
-              color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+              child: Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: _getColorForNota(resumen.promedioGeneral),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        resumen.promedioGeneral.toStringAsFixed(1),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Promedio General',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          _getTextoRendimiento(resumen.promedioGeneral, false),
+                          style: TextStyle(
+                            color: _getColorForNota(resumen.promedioGeneral),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '${resumen.evaluacionesAcademicas.length} tipos de evaluación',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+            const SizedBox(height: 16),
+          ],
+          
+          // Lista de evaluaciones por tipo
+          ...resumen.evaluacionesAcademicas.map((evaluacion) => 
+            _buildEvaluacionItem(context, evaluacion)
+          ).toList(),
+          
+          if (!resumen.tieneEvaluaciones)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No hay evaluaciones registradas para este estudiante',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildRendimientoCard(BuildContext context, estudiante) {
+  Widget _buildEvaluacionItem(BuildContext context, TipoEvaluacion evaluacion) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: _getColorForNota(evaluacion.valorPrincipal).withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _getColorForNota(evaluacion.valorPrincipal),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  evaluacion.valorPrincipal.toStringAsFixed(1),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      evaluacion.nombre,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '${evaluacion.total} evaluación(es)',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                evaluacion.textoRendimiento,
+                style: TextStyle(
+                  color: _getColorForNota(evaluacion.valorPrincipal),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          
+          // Mostrar detalle de evaluaciones si hay pocas
+          if (evaluacion.detalle.length <= 3 && evaluacion.detalle.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Divider(),
+            const SizedBox(height: 8),
+            ...evaluacion.detalle.map((detalle) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.circle,
+                    size: 8,
+                    color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.5),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${detalle.descripcion} - ${detalle.valor.toStringAsFixed(1)}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  Text(
+                    _formatearFecha(detalle.fecha),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                    ),
+                  ),
+                ],
+              ),
+            )).toList(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAsistenciaDetalladaCard(BuildContext context, TipoEvaluacion asistencia) {
     return CardContainerWidget(
       margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Column(
@@ -335,12 +536,12 @@ class DetalleEstudianteScreen extends StatelessWidget {
           Row(
             children: [
               Icon(
-                Icons.school,
+                Icons.calendar_today,
                 color: Theme.of(context).primaryColor,
               ),
               const SizedBox(width: 8),
               Text(
-                'Rendimiento Académico',
+                'Registro de Asistencia',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -350,198 +551,154 @@ class DetalleEstudianteScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Notas:',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
+          
+          // Indicador de porcentaje
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _getColorForAsistencia(asistencia.porcentaje ?? 0).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _getColorForAsistencia(asistencia.porcentaje ?? 0).withOpacity(0.3),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          estudiante.notas.isEmpty
-              ? const Text('No hay notas registradas')
-              : Column(
-                  children: estudiante.notas.entries.map<Widget>((entry) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: _getColorForAsistencia(asistencia.porcentaje ?? 0),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${(asistencia.porcentaje ?? 0).toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_formatEvaluacionNombre(entry.key)),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
+                          Text(
+                            'Porcentaje de Asistencia',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
                             ),
-                            decoration: BoxDecoration(
-                              color: _getColorForNota(entry.value),
-                              borderRadius: BorderRadius.circular(16),
+                          ),
+                          Text(
+                            _getTextoRendimiento(asistencia.porcentaje ?? 0, true),
+                            style: TextStyle(
+                              color: _getColorForAsistencia(asistencia.porcentaje ?? 0),
+                              fontWeight: FontWeight.bold,
                             ),
-                            child: Text(
-                              entry.value.toString(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                          ),
+                          Text(
+                            '${asistencia.total} registros',
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
                       ),
-                    );
-                  }).toList(),
-                ),
-          if (estudiante.notas.isNotEmpty) ...[
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Promedio General:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getColorForNota(_calcularPromedio(estudiante.notas)),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    _calcularPromedio(estudiante.notas).toStringAsFixed(1),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
                     ),
-                  ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                LinearProgressIndicator(
+                  value: (asistencia.porcentaje ?? 0) / 100,
+                  backgroundColor: Theme.of(context).dividerColor.withOpacity(0.3),
+                  color: _getColorForAsistencia(asistencia.porcentaje ?? 0),
+                  minHeight: 8,
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ],
             ),
+          ),
+          
+          // Lista de registros de asistencia
+          if (asistencia.detalle.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Registros Recientes:',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...asistencia.detalle.take(5).map((detalle) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: _getColorForValorAsistencia(detalle.valor),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          detalle.descripcion,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          _formatearFecha(detalle.fecha),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    _getTextoEstadoAsistencia(detalle.valor),
+                    style: TextStyle(
+                      color: _getColorForValorAsistencia(detalle.valor),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            )).toList(),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildAsistenciaParticipacionCard(BuildContext context, estudiante) {
+  Widget _buildLoadingResumenCard(BuildContext context) {
     return CardContainerWidget(
-      margin: const EdgeInsets.all(16.0),
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.assessment,
-                color: Theme.of(context).primaryColor,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Asistencia y Participación',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).primaryColor,
-                ),
-              ),
-            ],
-          ),
+          const CircularProgressIndicator(),
           const SizedBox(height: 16),
-          
-          // Asistencia
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Porcentaje de Asistencia:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: estudiante.porcentajeAsistencia / 100,
-                      backgroundColor: Theme.of(context).dividerColor.withOpacity(0.3),
-                      color: _getColorForAsistencia(estudiante.porcentajeAsistencia),
-                      minHeight: 10,
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${estudiante.porcentajeAsistencia.toStringAsFixed(0)}%',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          _getTextoAsistencia(estudiante.porcentajeAsistencia),
-                          style: TextStyle(
-                            color: _getColorForAsistencia(estudiante.porcentajeAsistencia),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 16),
-          
-          // Participación
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Participaciones en clase:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.record_voice_over,
-                          color: Theme.of(context).primaryColor,
-                          size: 32,
-                        ),
-                        const SizedBox(width: 16),
-                        Text(
-                          '${estudiante.participaciones}',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _getTextoParticipacion(estudiante.participaciones),
-                          style: TextStyle(
-                            color: _getColorForParticipacion(estudiante.participaciones),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            'Cargando resumen académico...',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+            ),
           ),
         ],
       ),
@@ -616,26 +773,13 @@ class DetalleEstudianteScreen extends StatelessWidget {
     return edad;
   }
 
-  String _formatEvaluacionNombre(String key) {
-    // Convierte "parcial1" a "Parcial 1"
-    final regex = RegExp(r'([a-zA-Z]+)(\d+)');
-    final match = regex.firstMatch(key);
-    if (match != null) {
-      final palabra = match.group(1)!;
-      final numero = match.group(2)!;
-      return '${palabra[0].toUpperCase()}${palabra.substring(1)} $numero';
+  String _formatearFecha(String fecha) {
+    try {
+      final dateTime = DateTime.parse(fecha);
+      return DateFormat('dd/MM/yyyy').format(dateTime);
+    } catch (e) {
+      return fecha;
     }
-    return key;
-  }
-
-  double _calcularPromedio(Map<String, double> notas) {
-    if (notas.isEmpty) return 0.0;
-    
-    double suma = 0.0;
-    for (final nota in notas.values) {
-      suma += nota;
-    }
-    return suma / notas.length;
   }
 
   Color _getColorForNota(double nota) {
@@ -658,33 +802,39 @@ class DetalleEstudianteScreen extends StatelessWidget {
     }
   }
 
-  String _getTextoAsistencia(double porcentaje) {
-    if (porcentaje >= 90) {
-      return 'Excelente';
-    } else if (porcentaje >= 75) {
-      return 'Regular';
+  Color _getColorForValorAsistencia(double valor) {
+    if (valor >= 100) {
+      return Colors.green; // Presente
+    } else if (valor >= 75) {
+      return Colors.blue; // Justificado
+    } else if (valor >= 50) {
+      return Colors.amber; // Tardanza
     } else {
+      return Colors.red; // Ausente
+    }
+  }
+
+  String _getTextoEstadoAsistencia(double valor) {
+    if (valor >= 100) {
+      return 'Presente';
+    } else if (valor >= 75) {
+      return 'Justificado';
+    } else if (valor >= 50) {
+      return 'Tardanza';
+    } else {
+      return 'Ausente';
+    }
+  }
+
+  String _getTextoRendimiento(double valor, bool esAsistencia) {
+    if (esAsistencia) {
+      if (valor >= 90) return 'Excelente';
+      if (valor >= 75) return 'Bueno';
       return 'Deficiente';
-    }
-  }
-
-  Color _getColorForParticipacion(int cantidad) {
-    if (cantidad >= 10) {
-      return Colors.green;
-    } else if (cantidad >= 5) {
-      return Colors.amber;
     } else {
-      return Colors.red;
-    }
-  }
-
-  String _getTextoParticipacion(int cantidad) {
-    if (cantidad >= 10) {
-      return 'Alto';
-    } else if (cantidad >= 5) {
-      return 'Medio';
-    } else {
-      return 'Bajo';
+      if (valor >= 80) return 'Excelente';
+      if (valor >= 60) return 'Bueno';
+      return 'Necesita mejorar';
     }
   }
 }

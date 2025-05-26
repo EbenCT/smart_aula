@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/curso_provider.dart';
 import '../../providers/estudiantes_provider.dart';
+import '../../providers/resumen_estudiante_provider.dart';
 import '../../models/estudiante.dart';
 import '../../screens/estudiantes/detalle_estudiante_screen.dart';
 import '../../widgets/search_header_widget.dart';
@@ -9,7 +10,6 @@ import '../../widgets/empty_state_widget.dart';
 import '../../widgets/card_container_widget.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/info_chip_widget.dart';
-import '../../widgets/prediction_indicator_widget.dart';
 
 class ListaEstudiantesScreen extends StatefulWidget {
   static const routeName = '/estudiantes';
@@ -32,12 +32,11 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<CursoProvider, EstudiantesProvider>(
-      builder: (context, cursoProvider, estudiantesProvider, child) {
+    return Consumer3<CursoProvider, EstudiantesProvider, ResumenEstudianteProvider>(
+      builder: (context, cursoProvider, estudiantesProvider, resumenProvider, child) {
         final cursoSeleccionado = cursoProvider.cursoSeleccionado;
         final materiaSeleccionada = cursoProvider.materiaSeleccionada;
         
-        // Verificar si hay selección completa
         if (!cursoProvider.tieneSeleccionCompleta) {
           return const EmptyStateWidget(
             icon: Icons.class_outlined,
@@ -52,6 +51,16 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
               cursoSeleccionado.id, 
               materiaSeleccionada.id
             );
+            
+            // Precargar resúmenes de estudiantes
+            if (estudiantesProvider.estudiantes.isNotEmpty) {
+              final estudianteIds = estudiantesProvider.estudiantes.map((e) => e.id).toList();
+              resumenProvider.preloadEstudiantesResumen(
+                estudianteIds: estudianteIds,
+                materiaId: materiaSeleccionada.id,
+                periodoId: 1, // Puedes ajustar esto según tu lógica de periodos
+              );
+            }
           }
         });
 
@@ -155,12 +164,28 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
                           ],
                         ),
                       ),
-                      Text(
-                        '${estudiantes.length} estudiante(s)',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '${estudiantes.length} estudiante(s)',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).primaryColor,
+                            ),
+                          ),
+                          if (resumenProvider.isLoading)
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Theme.of(context).primaryColor
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
@@ -193,13 +218,27 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
                     : RefreshIndicator(
                         onRefresh: () async {
                           await estudiantesProvider.recargarEstudiantes();
+                          // Limpiar cache y recargar resúmenes
+                          resumenProvider.clearCache();
+                          if (estudiantesProvider.estudiantes.isNotEmpty) {
+                            final estudianteIds = estudiantesProvider.estudiantes.map((e) => e.id).toList();
+                            await resumenProvider.preloadEstudiantesResumen(
+                              estudianteIds: estudianteIds,
+                              materiaId: materiaSeleccionada.id,
+                              periodoId: 1,
+                            );
+                          }
                         },
                         child: ListView.builder(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           itemCount: estudiantes.length,
                           itemBuilder: (ctx, index) {
                             final estudiante = estudiantes[index];
-                            return _buildEstudianteCard(estudiante);
+                            return _buildEstudianteCard(
+                              estudiante, 
+                              materiaSeleccionada.id,
+                              resumenProvider,
+                            );
                           },
                         ),
                       ),
@@ -211,7 +250,18 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
     );
   }
 
-  Widget _buildEstudianteCard(Estudiante estudiante) {
+  Widget _buildEstudianteCard(
+    Estudiante estudiante, 
+    int materiaId,
+    ResumenEstudianteProvider resumenProvider,
+  ) {
+    // Obtener estadísticas del resumen
+    final estadisticas = resumenProvider.getEstadisticasRapidas(
+      estudianteId: estudiante.id,
+      materiaId: materiaId,
+      periodoId: 1,
+    );
+
     return CardContainerWidget(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       onTap: () {
@@ -225,7 +275,7 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
       },
       child: Column(
         children: [
-          // Primera fila: Avatar, nombre y predicción
+          // Primera fila: Avatar, nombre y indicadores de rendimiento
           Row(
             children: [
               AvatarWidget(
@@ -263,36 +313,31 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
                   ],
                 ),
               ),
-              // Indicador de predicción
-              PredictionIndicatorWidget(
-                prediccion: estudiante.prediccion,
-                size: 40,
-              ),
+              // Indicador de progreso general
+              _buildIndicadorRendimiento(estadisticas),
             ],
           ),
           
           const SizedBox(height: 12),
           
-          // Segunda fila: Información académica (responsive)
+          // Segunda fila: Estadísticas académicas
           LayoutBuilder(
             builder: (context, constraints) {
-              // Si el ancho es muy pequeño, usar columna
               if (constraints.maxWidth < 300) {
                 return Column(
                   children: [
-                    _buildPromedioChip(estudiante),
+                    _buildPromedioChip(estadisticas),
                     const SizedBox(height: 8),
-                    _buildAsistenciaChip(estudiante),
+                    _buildAsistenciaChip(estadisticas),
                   ],
                 );
               }
               
-              // Para pantallas más grandes, usar fila
               return Row(
                 children: [
-                  Flexible(child: _buildPromedioChip(estudiante)),
+                  Flexible(child: _buildPromedioChip(estadisticas)),
                   const SizedBox(width: 8),
-                  Flexible(child: _buildAsistenciaChip(estudiante)),
+                  Flexible(child: _buildAsistenciaChip(estadisticas)),
                 ],
               );
             },
@@ -323,36 +368,174 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
           
           const SizedBox(height: 8),
           
-          // Cuarta fila: Etiqueta de predicción
-          PredictionLabelWidget(prediccion: estudiante.prediccion),
+          // Cuarta fila: Indicador de estado del resumen
+          _buildEstadoResumen(estadisticas),
         ],
       ),
     );
   }
 
-  Widget _buildPromedioChip(Estudiante estudiante) {
-    final promedio = _calcularPromedio(estudiante.notas);
+  Widget _buildIndicadorRendimiento(Map<String, dynamic> estadisticas) {
+    final tieneResumen = estadisticas['tieneResumen'] as bool;
+    final promedio = estadisticas['promedioGeneral'] as double;
+    
+    if (!tieneResumen) {
+      return Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.help_outline,
+          color: Colors.grey,
+          size: 20,
+        ),
+      );
+    }
+
+    final color = _getColorForNota(promedio);
+    
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              promedio.toStringAsFixed(1),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+            const Text(
+              'PROM',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 8,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPromedioChip(Map<String, dynamic> estadisticas) {
+    final tieneResumen = estadisticas['tieneResumen'] as bool;
+    final promedio = estadisticas['promedioGeneral'] as double;
+    final totalEvaluaciones = estadisticas['totalEvaluaciones'] as int;
     
     return InfoChipWidget(
       icon: Icons.school,
-      text: 'Promedio: ${estudiante.notas.isNotEmpty ? promedio.toStringAsFixed(1) : 'N/A'}',
+      text: tieneResumen 
+          ? 'Promedio: ${promedio.toStringAsFixed(1)} ($totalEvaluaciones eval.)'
+          : 'Promedio: Cargando...',
+      color: tieneResumen ? _getColorForNota(promedio) : Colors.grey,
     );
   }
 
-  Widget _buildAsistenciaChip(Estudiante estudiante) {
-    return InfoChipWidget(
-      icon: Icons.watch_later_outlined,
-      text: 'Asistencia: ${estudiante.porcentajeAsistencia.toStringAsFixed(0)}%',
-    );
-  }
-
-  double _calcularPromedio(Map<String, double> notas) {
-    if (notas.isEmpty) return 0.0;
+  Widget _buildAsistenciaChip(Map<String, dynamic> estadisticas) {
+    final tieneResumen = estadisticas['tieneResumen'] as bool;
+    final asistencia = estadisticas['porcentajeAsistencia'] as double;
     
-    double suma = 0.0;
-    for (final nota in notas.values) {
-      suma += nota;
+    return InfoChipWidget(
+      icon: Icons.calendar_today,
+      text: tieneResumen 
+          ? 'Asistencia: ${asistencia.toStringAsFixed(0)}%'
+          : 'Asistencia: Cargando...',
+      color: tieneResumen ? _getColorForAsistencia(asistencia) : Colors.grey,
+    );
+  }
+
+  Widget _buildEstadoResumen(Map<String, dynamic> estadisticas) {
+    final tieneResumen = estadisticas['tieneResumen'] as bool;
+    
+    if (!tieneResumen) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.orange.withOpacity(0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.sync,
+              size: 14,
+              color: Colors.orange.shade700,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Cargando estadísticas...',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.orange.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
     }
-    return suma / notas.length;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.green.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.check_circle_outline,
+            size: 14,
+            color: Colors.green.shade700,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Estadísticas actualizadas',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.green.shade700,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getColorForNota(double nota) {
+    if (nota >= 80) {
+      return Colors.green;
+    } else if (nota >= 60) {
+      return Colors.amber;
+    } else {
+      return Colors.red;
+    }
+  }
+
+  Color _getColorForAsistencia(double porcentaje) {
+    if (porcentaje >= 90) {
+      return Colors.green;
+    } else if (porcentaje >= 75) {
+      return Colors.amber;
+    } else {
+      return Colors.red;
+    }
   }
 }
