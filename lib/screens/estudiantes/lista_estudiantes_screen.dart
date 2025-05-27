@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/curso_provider.dart';
 import '../../providers/estudiantes_provider.dart';
-import '../../providers/resumen_estudiante_provider.dart';
 import '../../models/estudiante.dart';
 import '../../screens/estudiantes/detalle_estudiante_screen.dart';
 import '../../widgets/search_header_widget.dart';
@@ -32,8 +31,8 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer3<CursoProvider, EstudiantesProvider, ResumenEstudianteProvider>(
-      builder: (context, cursoProvider, estudiantesProvider, resumenProvider, child) {
+    return Consumer2<CursoProvider, EstudiantesProvider>(
+      builder: (context, cursoProvider, estudiantesProvider, child) {
         final cursoSeleccionado = cursoProvider.cursoSeleccionado;
         final materiaSeleccionada = cursoProvider.materiaSeleccionada;
         
@@ -51,16 +50,6 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
               cursoSeleccionado.id, 
               materiaSeleccionada.id
             );
-            
-            // Precargar resúmenes de estudiantes
-            if (estudiantesProvider.estudiantes.isNotEmpty) {
-              final estudianteIds = estudiantesProvider.estudiantes.map((e) => e.id).toList();
-              resumenProvider.preloadEstudiantesResumen(
-                estudianteIds: estudianteIds,
-                materiaId: materiaSeleccionada.id,
-                periodoId: 1, // Puedes ajustar esto según tu lógica de periodos
-              );
-            }
           }
         });
 
@@ -164,28 +153,12 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
                           ],
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '${estudiantes.length} estudiante(s)',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          ),
-                          if (resumenProvider.isLoading)
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Theme.of(context).primaryColor
-                                ),
-                              ),
-                            ),
-                        ],
+                      Text(
+                        '${estudiantes.length} estudiante(s)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
                       ),
                     ],
                   ),
@@ -218,27 +191,13 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
                     : RefreshIndicator(
                         onRefresh: () async {
                           await estudiantesProvider.recargarEstudiantes();
-                          // Limpiar cache y recargar resúmenes
-                          resumenProvider.clearCache();
-                          if (estudiantesProvider.estudiantes.isNotEmpty) {
-                            final estudianteIds = estudiantesProvider.estudiantes.map((e) => e.id).toList();
-                            await resumenProvider.preloadEstudiantesResumen(
-                              estudianteIds: estudianteIds,
-                              materiaId: materiaSeleccionada.id,
-                              periodoId: 1,
-                            );
-                          }
                         },
                         child: ListView.builder(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           itemCount: estudiantes.length,
                           itemBuilder: (ctx, index) {
                             final estudiante = estudiantes[index];
-                            return _buildEstudianteCard(
-                              estudiante, 
-                              materiaSeleccionada.id,
-                              resumenProvider,
-                            );
+                            return _buildEstudianteCard(estudiante);
                           },
                         ),
                       ),
@@ -250,21 +209,11 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
     );
   }
 
-  Widget _buildEstudianteCard(
-    Estudiante estudiante, 
-    int materiaId,
-    ResumenEstudianteProvider resumenProvider,
-  ) {
-    // Obtener estadísticas del resumen
-    final estadisticas = resumenProvider.getEstadisticasRapidas(
-      estudianteId: estudiante.id,
-      materiaId: materiaId,
-      periodoId: 1,
-    );
-
+  Widget _buildEstudianteCard(Estudiante estudiante) {
     return CardContainerWidget(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       onTap: () {
+        // Navegar a detalle sin pasar datos adicionales
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (ctx) => DetalleEstudianteScreen(
@@ -273,269 +222,108 @@ class _ListaEstudiantesScreenState extends State<ListaEstudiantesScreen> {
           ),
         );
       },
-      child: Column(
+      child: Row(
         children: [
-          // Primera fila: Avatar, nombre y indicadores de rendimiento
-          Row(
-            children: [
-              AvatarWidget(
-                nombre: estudiante.nombre,
-                apellido: estudiante.apellido,
-                backgroundColor: Theme.of(context).primaryColor,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // Avatar del estudiante
+          AvatarWidget(
+            nombre: estudiante.nombre,
+            apellido: estudiante.apellido,
+            backgroundColor: Theme.of(context).primaryColor,
+            radius: 28,
+          ),
+          const SizedBox(width: 16),
+          
+          // Información básica del estudiante
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  estudiante.nombreCompleto,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
                   children: [
-                    Text(
-                      estudiante.nombreCompleto,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    Icon(
+                      Icons.badge,
+                      size: 14,
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(width: 4),
                     Text(
                       estudiante.codigo,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                        fontWeight: FontWeight.w500,
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      estudiante.email,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
-                      ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
-              ),
-              // Indicador de progreso general
-              _buildIndicadorRendimiento(estadisticas),
-            ],
-          ),
-          
-          const SizedBox(height: 12),
-          
-          // Segunda fila: Estadísticas académicas
-          LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth < 300) {
-                return Column(
+                const SizedBox(height: 4),
+                Row(
                   children: [
-                    _buildPromedioChip(estadisticas),
-                    const SizedBox(height: 8),
-                    _buildAsistenciaChip(estadisticas),
+                    Icon(
+                      Icons.email_outlined,
+                      size: 14,
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        estudiante.email,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
-                );
-              }
-              
-              return Row(
-                children: [
-                  Flexible(child: _buildPromedioChip(estadisticas)),
-                  const SizedBox(width: 8),
-                  Flexible(child: _buildAsistenciaChip(estadisticas)),
-                ],
-              );
-            },
-          ),
-          
-          const SizedBox(height: 8),
-          
-          // Tercera fila: Información del tutor
-          Row(
-            children: [
-              Expanded(
-                child: InfoChipWidget(
-                  icon: Icons.person_outline,
-                  text: 'Tutor: ${estudiante.nombreTutor}',
-                  fontSize: 11,
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: InfoChipWidget(
-                  icon: Icons.phone_outlined,
-                  text: estudiante.telefonoTutor,
-                  fontSize: 11,
+                const SizedBox(height: 8),
+                
+                // Información del tutor (compacta)
+                Row(
+                  children: [
+                    Expanded(
+                      child: InfoChipWidget(
+                        icon: Icons.person_outline,
+                        text: estudiante.nombreTutor,
+                        fontSize: 11,
+                        iconSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    InfoChipWidget(
+                      icon: Icons.phone_outlined,
+                      text: estudiante.telefonoTutor,
+                      fontSize: 11,
+                      iconSize: 12,
+                    ),
+                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           
-          const SizedBox(height: 8),
-          
-          // Cuarta fila: Indicador de estado del resumen
-          _buildEstadoResumen(estadisticas),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIndicadorRendimiento(Map<String, dynamic> estadisticas) {
-    final tieneResumen = estadisticas['tieneResumen'] as bool;
-    final promedio = estadisticas['promedioGeneral'] as double;
-    
-    if (!tieneResumen) {
-      return Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          color: Colors.grey.shade300,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.help_outline,
-          color: Colors.grey,
-          size: 20,
-        ),
-      );
-    }
-
-    final color = _getColorForNota(promedio);
-    
-    return Container(
-      width: 50,
-      height: 50,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              promedio.toStringAsFixed(1),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+          // Indicador de "ver más"
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).primaryColor.withOpacity(0.1),
+              shape: BoxShape.circle,
             ),
-            const Text(
-              'PROM',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 8,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPromedioChip(Map<String, dynamic> estadisticas) {
-    final tieneResumen = estadisticas['tieneResumen'] as bool;
-    final promedio = estadisticas['promedioGeneral'] as double;
-    final totalEvaluaciones = estadisticas['totalEvaluaciones'] as int;
-    
-    return InfoChipWidget(
-      icon: Icons.school,
-      text: tieneResumen 
-          ? 'Promedio: ${promedio.toStringAsFixed(1)} ($totalEvaluaciones eval.)'
-          : 'Promedio: Cargando...',
-      color: tieneResumen ? _getColorForNota(promedio) : Colors.grey,
-    );
-  }
-
-  Widget _buildAsistenciaChip(Map<String, dynamic> estadisticas) {
-    final tieneResumen = estadisticas['tieneResumen'] as bool;
-    final asistencia = estadisticas['porcentajeAsistencia'] as double;
-    
-    return InfoChipWidget(
-      icon: Icons.calendar_today,
-      text: tieneResumen 
-          ? 'Asistencia: ${asistencia.toStringAsFixed(0)}%'
-          : 'Asistencia: Cargando...',
-      color: tieneResumen ? _getColorForAsistencia(asistencia) : Colors.grey,
-    );
-  }
-
-  Widget _buildEstadoResumen(Map<String, dynamic> estadisticas) {
-    final tieneResumen = estadisticas['tieneResumen'] as bool;
-    
-    if (!tieneResumen) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.orange.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.orange.withOpacity(0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.sync,
-              size: 14,
-              color: Colors.orange.shade700,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'Cargando estadísticas...',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.orange.shade700,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.green.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.check_circle_outline,
-            size: 14,
-            color: Colors.green.shade700,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Estadísticas actualizadas',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.green.shade700,
-              fontWeight: FontWeight.w500,
+            child: Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: Theme.of(context).primaryColor,
             ),
           ),
         ],
       ),
     );
-  }
-
-  Color _getColorForNota(double nota) {
-    if (nota >= 80) {
-      return Colors.green;
-    } else if (nota >= 60) {
-      return Colors.amber;
-    } else {
-      return Colors.red;
-    }
-  }
-
-  Color _getColorForAsistencia(double porcentaje) {
-    if (porcentaje >= 90) {
-      return Colors.green;
-    } else if (porcentaje >= 75) {
-      return Colors.amber;
-    } else {
-      return Colors.red;
-    }
   }
 }
