@@ -5,9 +5,11 @@ import 'package:intl/intl.dart';
 import '../../providers/estudiantes_provider.dart';
 import '../../providers/curso_provider.dart';
 import '../../providers/resumen_estudiante_provider.dart';
+import '../../providers/prediccion_completa_provider.dart';
 import '../../models/resumen_estudiante.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/card_container_widget.dart';
+import '../../widgets/prediccion_completa_widget.dart';
 
 class DetalleEstudianteScreen extends StatefulWidget {
   final String estudianteId;
@@ -21,17 +23,39 @@ class DetalleEstudianteScreen extends StatefulWidget {
   _DetalleEstudianteScreenState createState() => _DetalleEstudianteScreenState();
 }
 
-class _DetalleEstudianteScreenState extends State<DetalleEstudianteScreen> {
+class _DetalleEstudianteScreenState extends State<DetalleEstudianteScreen> 
+    with AutomaticKeepAliveClientMixin {
+  
   ResumenEstudiante? _resumenEstudiante;
   bool _isLoadingResumen = false;
   String? _errorResumen;
+  bool _dataLoaded = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _cargarResumenEstudiante();
+      _cargarDatosEstudiante();
     });
+  }
+
+  Future<void> _cargarDatosEstudiante() async {
+    if (_dataLoaded) return;
+
+    final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
+    
+    if (!cursoProvider.tieneSeleccionCompleta) return;
+
+    // Cargar resumen académico y precargar predicciones en paralelo
+    await Future.wait([
+      _cargarResumenEstudiante(),
+      _precargarPredicciones(),
+    ]);
+
+    _dataLoaded = true;
   }
 
   Future<void> _cargarResumenEstudiante() async {
@@ -50,7 +74,7 @@ class _DetalleEstudianteScreenState extends State<DetalleEstudianteScreen> {
         estudianteId: int.parse(widget.estudianteId),
         materiaId: cursoProvider.materiaSeleccionada!.id,
         periodoId: 1,
-        forceRefresh: true,
+        forceRefresh: false, // Usar cache si está disponible
       );
 
       if (mounted) {
@@ -73,8 +97,61 @@ class _DetalleEstudianteScreenState extends State<DetalleEstudianteScreen> {
     }
   }
 
+  Future<void> _precargarPredicciones() async {
+    final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
+    final prediccionProvider = Provider.of<PrediccionCompletaProvider>(context, listen: false);
+    
+    if (!cursoProvider.tieneSeleccionCompleta) return;
+
+    try {
+      // Precargar predicciones en background
+      await prediccionProvider.precargarPredicciones(
+        estudianteId: int.parse(widget.estudianteId),
+        materiaId: cursoProvider.materiaSeleccionada!.id,
+        gestionId: 1,
+      );
+    } catch (e) {
+      // Fallar silenciosamente en precarga
+      debugPrint('Error precargando predicciones: $e');
+    }
+  }
+
+  Future<void> _refreshData() async {
+    setState(() {
+      _dataLoaded = false;
+    });
+    
+    final resumenProvider = Provider.of<ResumenEstudianteProvider>(context, listen: false);
+    final prediccionProvider = Provider.of<PrediccionCompletaProvider>(context, listen: false);
+    
+    // Limpiar cache para forzar recarga
+    resumenProvider.clearStudentCache(int.parse(widget.estudianteId));
+    prediccionProvider.invalidarCache(
+      estudianteId: int.parse(widget.estudianteId),
+      materiaId: Provider.of<CursoProvider>(context, listen: false).materiaSeleccionada?.id,
+      gestionId: 1,
+    );
+    
+    await _cargarDatosEstudiante();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Datos del estudiante actualizados'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+    
     return Consumer2<EstudiantesProvider, CursoProvider>(
       builder: (context, estudiantesProvider, cursoProvider, child) {
         final estudiante = estudiantesProvider.getEstudiantePorId(int.parse(widget.estudianteId));
@@ -110,28 +187,40 @@ class _DetalleEstudianteScreenState extends State<DetalleEstudianteScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.refresh),
-                onPressed: _cargarResumenEstudiante,
+                onPressed: _refreshData,
                 tooltip: 'Actualizar datos',
               ),
             ],
           ),
-          body: SingleChildScrollView(
-            child: Column(
-              children: [
-                // Encabezado con información básica del estudiante
-                _buildHeaderSection(context, estudiante),
-                
-                // Resumen académico (cargado bajo demanda)
-                _buildResumenAcademico(context),
-                
-                // Información personal
-                _buildInformacionPersonalCard(context, estudiante),
-                
-                // Información del tutor
-                _buildInformacionTutorCard(context, estudiante),
-                
-                const SizedBox(height: 20),
-              ],
+          body: RefreshIndicator(
+            onRefresh: _refreshData,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  // Encabezado con información básica del estudiante
+                  _buildHeaderSection(context, estudiante),
+                  
+                  // Predicciones de Machine Learning (nueva sección)
+                  if (cursoProvider.tieneSeleccionCompleta)
+                    PrediccionCompletaWidget(
+                      estudianteId: int.parse(widget.estudianteId),
+                      materiaId: cursoProvider.materiaSeleccionada!.id,
+                      gestionId: 1,
+                    ),
+                  
+                  // Resumen académico
+                  _buildResumenAcademico(context),
+                  
+                  // Información personal
+                  _buildInformacionPersonalCard(context, estudiante),
+                  
+                  // Información del tutor
+                  _buildInformacionTutorCard(context, estudiante),
+                  
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
         );

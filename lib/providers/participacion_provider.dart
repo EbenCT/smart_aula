@@ -124,7 +124,7 @@ class ParticipacionProvider with ChangeNotifier {
     try {
       DebugLogger.info('Llamando a API para obtener participaciones masivas', tag: 'PARTICIPACION_PROVIDER');
       
-      final response = await _apiService!.evaluaciones.getParticipacionesMasivas(
+      final response = await _apiService.evaluaciones.getParticipacionesMasivas(
         cursoId: cursoId,
         materiaId: materiaId,
         fecha: fecha,

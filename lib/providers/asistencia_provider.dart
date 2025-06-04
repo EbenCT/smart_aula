@@ -124,7 +124,7 @@ class AsistenciaProvider with ChangeNotifier {
     try {
       DebugLogger.info('Llamando a API para obtener asistencias masivas', tag: 'ASISTENCIA_PROVIDER');
       
-      final response = await _apiService!.evaluaciones.getAsistenciasMasivas(
+      final response = await _apiService.evaluaciones.getAsistenciasMasivas(
         cursoId: cursoId,
         materiaId: materiaId,
         fecha: fecha,
@@ -152,7 +152,7 @@ class AsistenciaProvider with ChangeNotifier {
                 estudianteId: asistenciaData['estudiante_id'].toString(),
                 cursoId: materiaId.toString(),
                 fecha: DateTime.parse(asistenciaData['fecha']),
-                estado: _apiService!.evaluaciones.mapearEstadoDesdeBackend(asistenciaData['valor']),
+                estado: _apiService.evaluaciones.mapearEstadoDesdeBackend(asistenciaData['valor']),
                 observacion: asistenciaData['descripcion'],
               );
               
