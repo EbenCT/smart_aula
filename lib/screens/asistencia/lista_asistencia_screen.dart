@@ -6,6 +6,7 @@ import '../../providers/asistencia_provider.dart';
 import '../../providers/estudiantes_provider.dart';
 import '../../providers/curso_provider.dart';
 import '../../models/asistencia.dart';
+import '../../utils/debug_logger.dart';
 import '../../widgets/search_header_widget.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../../widgets/summary_stats_widget.dart';
@@ -449,98 +450,127 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     );
   }
 
-  Future<void> _guardarAsistencias(BuildContext context) async {
-    setState(() {
-      _isSaving = true;
-    });
+// lib/screens/asistencia/lista_asistencia_screen.dart - Método _guardarAsistencias con logs
+Future<void> _guardarAsistencias(BuildContext context) async {
+  DebugLogger.info('=== INICIANDO GUARDADO DE ASISTENCIAS ===', tag: 'ASISTENCIA_SCREEN');
+  
+  setState(() {
+    _isSaving = true;
+  });
 
-    try {
-      final authService = Provider.of<AuthService>(context, listen: false);
-      final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
-      final estudiantesProvider = Provider.of<EstudiantesProvider>(context, listen: false);
-      final asistenciaProvider = Provider.of<AsistenciaProvider>(context, listen: false);
-      final apiService = Provider.of<ApiService>(context, listen: false);
+  try {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
+    final estudiantesProvider = Provider.of<EstudiantesProvider>(context, listen: false);
+    final asistenciaProvider = Provider.of<AsistenciaProvider>(context, listen: false);
+    final apiService = Provider.of<ApiService>(context, listen: false);
 
-      // Verificar que tenemos la información necesaria
-      if (!cursoProvider.tieneSeleccionCompleta) {
-        throw Exception('No hay curso y materia seleccionados');
-      }
+    DebugLogger.info('Providers obtenidos correctamente', tag: 'ASISTENCIA_SCREEN');
 
-      final docenteId = authService.usuario?.id;
-      if (docenteId == null) {
-        throw Exception('No se pudo obtener el ID del docente');
-      }
+    // Verificar que tenemos la información necesaria
+    if (!cursoProvider.tieneSeleccionCompleta) {
+      throw Exception('No hay curso y materia seleccionados');
+    }
 
-      final cursoId = cursoProvider.cursoSeleccionado!.id;
-      final materiaId = cursoProvider.materiaSeleccionada!.id;
-      final estudiantes = estudiantesProvider.estudiantes;
+    final docenteId = authService.usuario?.id;
+    if (docenteId == null) {
+      throw Exception('No se pudo obtener el ID del docente');
+    }
 
-      if (estudiantes.isEmpty) {
-        throw Exception('No hay estudiantes para registrar asistencia');
-      }
+    final cursoId = cursoProvider.cursoSeleccionado!.id;
+    final materiaId = cursoProvider.materiaSeleccionada!.id;
+    final estudiantes = estudiantesProvider.estudiantes;
 
-      // Preparar datos para el backend
-      List<Map<String, dynamic>> asistenciasData = [];
+    DebugLogger.info('Datos de contexto:', tag: 'ASISTENCIA_SCREEN');
+    DebugLogger.info('- Docente ID: $docenteId', tag: 'ASISTENCIA_SCREEN');
+    DebugLogger.info('- Curso ID: $cursoId', tag: 'ASISTENCIA_SCREEN');
+    DebugLogger.info('- Materia ID: $materiaId', tag: 'ASISTENCIA_SCREEN');
+    DebugLogger.info('- Fecha: $_fechaSeleccionada', tag: 'ASISTENCIA_SCREEN');
+    DebugLogger.info('- Número de estudiantes: ${estudiantes.length}', tag: 'ASISTENCIA_SCREEN');
 
-      for (final estudiante in estudiantes) {
-        // Buscar la asistencia del estudiante o usar ausente por defecto
-        final asistencia = asistenciaProvider.getAsistenciaEstudiante(
-          estudiante.id.toString(),
-          _fechaSeleccionada,
-        );
+    if (estudiantes.isEmpty) {
+      throw Exception('No hay estudiantes para registrar asistencia');
+    }
 
-        final estadoFinal = asistencia?.estado ?? EstadoAsistencia.ausente;
+    // Preparar datos para el backend
+    List<Map<String, dynamic>> asistenciasData = [];
 
-        asistenciasData.add({
-          'id': estudiante.id,
-          'estado': _mapearEstadoAsistencia(estadoFinal),
-        });
-      }
+    DebugLogger.info('Preparando datos de asistencia...', tag: 'ASISTENCIA_SCREEN');
 
-      // Enviar al backend
-      await apiService.enviarAsistencias(
-        docenteId: docenteId,
-        cursoId: cursoId,
-        materiaId: materiaId,
-        fecha: _fechaSeleccionada,
-        asistencias: asistenciasData,
+    for (final estudiante in estudiantes) {
+      // Buscar la asistencia del estudiante o usar ausente por defecto
+      final asistencia = asistenciaProvider.getAsistenciaEstudiante(
+        estudiante.id.toString(),
+        _fechaSeleccionada,
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Asistencias guardadas correctamente'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
+      final estadoFinal = asistencia?.estado ?? EstadoAsistencia.ausente;
+      final estadoMapeado = _mapearEstadoAsistencia(estadoFinal);
 
-        // Recargar asistencias después de guardar para sincronizar con el servidor
-        await _cargarAsistencia();
-      }
+      DebugLogger.info('Estudiante ${estudiante.id} (${estudiante.nombreCompleto}): $estadoFinal -> $estadoMapeado', tag: 'ASISTENCIA_SCREEN');
 
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar asistencias: ${error.toString()}'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
+      asistenciasData.add({
+        'id': estudiante.id,
+        'estado': estadoMapeado,
+      });
     }
+
+    DebugLogger.info('Datos preparados para envío:', tag: 'ASISTENCIA_SCREEN');
+    DebugLogger.info('Número de asistencias: ${asistenciasData.length}', tag: 'ASISTENCIA_SCREEN');
+    DebugLogger.info('Primeras 3 asistencias: ${asistenciasData.take(3).toList()}', tag: 'ASISTENCIA_SCREEN');
+
+    // Enviar al backend
+    DebugLogger.info('Enviando asistencias al backend...', tag: 'ASISTENCIA_SCREEN');
+    
+    await apiService.enviarAsistencias(
+      docenteId: docenteId,
+      cursoId: cursoId,
+      materiaId: materiaId,
+      fecha: _fechaSeleccionada,
+      asistencias: asistenciasData,
+    );
+
+    DebugLogger.info('Asistencias enviadas exitosamente', tag: 'ASISTENCIA_SCREEN');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Asistencias guardadas correctamente'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+
+      // Recargar asistencias después de guardar para sincronizar con el servidor
+      DebugLogger.info('Recargando asistencias después de guardar...', tag: 'ASISTENCIA_SCREEN');
+      await _cargarAsistencia();
+    }
+
+  } catch (error) {
+    DebugLogger.error('Error al guardar asistencias', tag: 'ASISTENCIA_SCREEN', error: error);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar: ${error.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isSaving = false;
+      });
+    }
+    DebugLogger.info('=== GUARDADO DE ASISTENCIAS FINALIZADO ===', tag: 'ASISTENCIA_SCREEN');
   }
+}
 }

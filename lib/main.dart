@@ -7,17 +7,24 @@ import 'providers/estudiantes_provider.dart';
 import 'providers/asistencia_provider.dart';
 import 'providers/participacion_provider.dart';
 import 'providers/resumen_provider.dart';
-import 'providers/resumen_estudiante_provider.dart'; // Nueva importación
+import 'providers/resumen_estudiante_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/services.dart';
+import 'utils/debug_logger.dart'; // Nueva importación
 
 void main() async {
   // Asegurarse de que Flutter esté inicializado
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Habilitar logs en debug
+  DebugLogger.enable();
+  DebugLogger.info('=== INICIANDO APLICACIÓN ===');
+  
   // Inicializar datos de localización para español e inglés
   await initializeDateFormatting('es', null); 
   await initializeDateFormatting('en', null);
+  
+  DebugLogger.info('Localización inicializada');
   
   runApp(
     MultiProvider(
@@ -68,4 +75,6 @@ void main() async {
       child: const AulaInteligenteApp(),
     ),
   );
+  
+  DebugLogger.info('Aplicación iniciada con todos los providers configurados');
 }
