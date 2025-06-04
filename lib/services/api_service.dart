@@ -6,11 +6,13 @@ import './evaluacion_api_service.dart';
 import './prediccion_api_service.dart';
 import './resumen_api_service.dart';
 import './resumen_estudiante_api_service.dart';
+import './prediccion_completa_api_service.dart';
 import '../models/curso.dart';
 import '../models/materia.dart';
 import '../models/estudiante.dart';
 import '../models/asistencia.dart';
 import '../models/participacion.dart';
+import '../models/prediccion_completa.dart';
 
 class ApiService {
   final AuthService _authService;
@@ -21,6 +23,7 @@ class ApiService {
   late final PrediccionApiService predicciones;
   late final ResumenApiService resumen;
   late final ResumenEstudianteApiService resumenEstudiante;
+  late final PrediccionCompletaApiService prediccionesCompletas;
   
   ApiService(this._authService) {
     cursos = CursoApiService(_authService);
@@ -29,7 +32,41 @@ class ApiService {
     predicciones = PrediccionApiService(_authService);
     resumen = ResumenApiService(_authService);
     resumenEstudiante = ResumenEstudianteApiService(_authService);
+    prediccionesCompletas = PrediccionCompletaApiService(_authService);
   }
+
+  // PREDICCIONES COMPLETAS
+  Future<List<PrediccionCompleta>> getPrediccionesCompletas({
+    required int estudianteId,
+    required int materiaId,
+    int gestionId = 1,
+  }) => prediccionesCompletas.getPrediccionesCompletas(
+    estudianteId: estudianteId,
+    materiaId: materiaId,
+    gestionId: gestionId,
+  );
+
+  Future<PrediccionCompleta?> getPrediccionPorPeriodo({
+    required int estudianteId,
+    required int materiaId,
+    required int periodoId,
+    int gestionId = 1,
+  }) => prediccionesCompletas.getPrediccionPorPeriodo(
+    estudianteId: estudianteId,
+    materiaId: materiaId,
+    periodoId: periodoId,
+    gestionId: gestionId,
+  );
+
+  Future<Map<String, dynamic>> getEstadisticasPredicciones({
+    required int estudianteId,
+    required int materiaId,
+    int gestionId = 1,
+  }) => prediccionesCompletas.getEstadisticasPredicciones(
+    estudianteId: estudianteId,
+    materiaId: materiaId,
+    gestionId: gestionId,
+  );
 
   // RESUMEN DE MATERIA
   Future<Map<String, dynamic>> getResumenMateriaCompleto(int cursoId, int materiaId) => 

@@ -8,9 +8,10 @@ import 'providers/asistencia_provider.dart';
 import 'providers/participacion_provider.dart';
 import 'providers/resumen_provider.dart';
 import 'providers/resumen_estudiante_provider.dart';
+import 'providers/prediccion_completa_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/services.dart';
-import 'utils/debug_logger.dart'; // Nueva importación
+import 'utils/debug_logger.dart';
 
 void main() async {
   // Asegurarse de que Flutter esté inicializado
@@ -58,6 +59,12 @@ void main() async {
         ChangeNotifierProxyProvider<ApiService, ResumenEstudianteProvider>(
           create: (context) => ResumenEstudianteProvider(Provider.of<ApiService>(context, listen: false)),
           update: (context, apiService, previous) => previous ?? ResumenEstudianteProvider(apiService),
+        ),
+        
+        // Nuevo provider para predicciones completas
+        ChangeNotifierProxyProvider<ApiService, PrediccionCompletaProvider>(
+          create: (context) => PrediccionCompletaProvider(Provider.of<ApiService>(context, listen: false)),
+          update: (context, apiService, previous) => previous ?? PrediccionCompletaProvider(apiService),
         ),
         
         // AsistenciaProvider depende del ApiService

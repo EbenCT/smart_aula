@@ -8,4 +8,5 @@ export 'evaluacion_api_service.dart';
 export 'prediccion_api_service.dart';
 export 'resumen_api_service.dart';
 export 'resumen_estudiante_api_service.dart';
+export 'prediccion_completa_api_service.dart';
 export 'storage_service.dart';
