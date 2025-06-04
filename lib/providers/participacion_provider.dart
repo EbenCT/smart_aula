@@ -1,6 +1,4 @@
 // lib/providers/participacion_provider.dart
-// ignore_for_file: unused_field
-
 import 'package:flutter/foundation.dart';
 import '../models/participacion.dart';
 import '../services/api_service.dart';
@@ -14,6 +12,10 @@ class ParticipacionProvider with ChangeNotifier {
   int? _materiaId;
   bool _isLoading = false;
   String? _errorMessage;
+  
+  // Cache para optimizar cargas
+  final Map<String, DateTime> _loadTimes = {};
+  final Map<String, List<Participacion>> _cache = {};
 
   ParticipacionProvider([this._apiService]);
 
@@ -21,6 +23,20 @@ class ParticipacionProvider with ChangeNotifier {
   DateTime get fechaSeleccionada => _fechaSeleccionada;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  
+  // Generar clave de cache
+  String _getCacheKey(int cursoId, int materiaId, DateTime fecha) {
+    final fechaStr = '${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}';
+    return 'part_${cursoId}_${materiaId}_$fechaStr';
+  }
+  
+  // Verificar si el cache es válido (datos frescos por 5 minutos)
+  bool _isCacheFresh(String cacheKey) {
+    if (!_loadTimes.containsKey(cacheKey)) return false;
+    final now = DateTime.now();
+    final difference = now.difference(_loadTimes[cacheKey]!);
+    return difference.inMinutes < 5;
+  }
   
   List<Participacion> participacionesPorCursoYFecha(String cursoId, DateTime fecha) {
     return _participaciones.where((p) => 
@@ -32,113 +48,165 @@ class ParticipacionProvider with ChangeNotifier {
   }
 
   void setCursoId(String cursoId) {
-    _cursoId = cursoId;
-    notifyListeners();
+    if (_cursoId != cursoId) {
+      _cursoId = cursoId;
+      notifyListeners();
+    }
   }
 
   void setMateriaId(int materiaId) {
-    _materiaId = materiaId;
-    notifyListeners();
+    if (_materiaId != materiaId) {
+      _materiaId = materiaId;
+      notifyListeners();
+    }
   }
 
   void setFechaSeleccionada(DateTime fecha) {
-    _fechaSeleccionada = fecha;
-    notifyListeners();
+    if (_fechaSeleccionada != fecha) {
+      _fechaSeleccionada = fecha;
+      notifyListeners();
+    }
   }
 
-  // Cargar participaciones desde el backend
+  // Cargar participaciones desde el backend con optimización
   Future<void> cargarParticipacionesDesdeBackend({
     required int cursoId,
     required int materiaId,
     required DateTime fecha,
+    bool forceRefresh = false,
   }) async {
     if (_apiService == null) {
-      _errorMessage = 'Servicio API no disponible';
-      notifyListeners();
+      _setError('Servicio no disponible');
       return;
     }
 
-    _isLoading = true;
+    final cacheKey = _getCacheKey(cursoId, materiaId, fecha);
+    
+    // Verificar cache primero
+    if (!forceRefresh && _isCacheFresh(cacheKey) && _cache.containsKey(cacheKey)) {
+      _participaciones = List.from(_cache[cacheKey]!);
+      _actualizarEstado(cursoId, materiaId, fecha);
+      return;
+    }
+
+    // Evitar cargas simultáneas
+    if (_isLoading) return;
+
+    _setLoadingState(true);
     _errorMessage = null;
-    notifyListeners();
 
     try {
-      print('Cargando participaciones para: curso=$cursoId, materia=$materiaId, fecha=$fecha');
-      
-      final response = await _apiService.evaluaciones.getParticipacionesMasivas(
+      final response = await _apiService!.evaluaciones.getParticipacionesMasivas(
         cursoId: cursoId,
         materiaId: materiaId,
         fecha: fecha,
       );
 
-      print('Respuesta del backend: $response');
+      final participacionesNuevas = <Participacion>[];
 
-      // Limpiar participaciones existentes para esta fecha
-      _participaciones.removeWhere((p) => 
-        p.fecha.year == fecha.year && 
-        p.fecha.month == fecha.month && 
-        p.fecha.day == fecha.day
-      );
-
-      // Procesar las participaciones del backend
       if (response['evaluaciones'] != null) {
         final participacionesBackend = response['evaluaciones'] as List<dynamic>;
-        print('Número de participaciones encontradas: ${participacionesBackend.length}');
         
         for (final participacionData in participacionesBackend) {
           try {
-            print('Procesando participación: $participacionData');
-            
-            // Validar que los campos requeridos existen
-            if (participacionData['id'] == null || 
-                participacionData['estudiante_id'] == null || 
-                participacionData['fecha'] == null ||
-                participacionData['valor'] == null) {
-              print('Datos incompletos en participación: $participacionData');
-              continue;
+            if (_validarDatosParticipacion(participacionData)) {
+              final participacion = Participacion(
+                id: participacionData['id'].toString(),
+                estudianteId: participacionData['estudiante_id'].toString(),
+                cursoId: materiaId.toString(),
+                fecha: DateTime.parse(participacionData['fecha']),
+                valoracion: (participacionData['valor'] is double) 
+                    ? (participacionData['valor'] as double).toInt() 
+                    : (participacionData['valor'] as int),
+                descripcion: participacionData['descripcion'] ?? 'Participación',
+                tipo: TipoParticipacion.comentario,
+              );
+              
+              participacionesNuevas.add(participacion);
             }
-            
-            final participacion = Participacion(
-              id: participacionData['id'].toString(),
-              estudianteId: participacionData['estudiante_id'].toString(),
-              cursoId: materiaId.toString(), // Usamos materiaId como cursoId para compatibilidad
-              fecha: DateTime.parse(participacionData['fecha']),
-              valoracion: (participacionData['valor'] is double) 
-                  ? (participacionData['valor'] as double).toInt() 
-                  : (participacionData['valor'] as int),
-              descripcion: participacionData['descripcion'] ?? 'Participación',
-              tipo: TipoParticipacion.comentario, // Por defecto
-            );
-            
-            _participaciones.add(participacion);
-            print('Participación agregada exitosamente para estudiante: ${participacion.estudianteId}');
           } catch (e) {
-            print('Error procesando participación individual: $e');
-            print('Datos de participación problemática: $participacionData');
-            // Continuar con el siguiente registro aunque uno falle
+            // Continuar con el siguiente registro si uno falla
+            debugPrint('Error procesando participación: $e');
           }
         }
-      } else {
-        print('No se encontraron participaciones en la respuesta');
       }
 
-      _cursoId = materiaId.toString();
-      _materiaId = materiaId;
-      _fechaSeleccionada = fecha;
-
-      print('Participaciones cargadas exitosamente. Total: ${_participaciones.length}');
+      // Actualizar cache y estado
+      _cache[cacheKey] = List.from(participacionesNuevas);
+      _loadTimes[cacheKey] = DateTime.now();
+      _participaciones = participacionesNuevas;
+      _actualizarEstado(cursoId, materiaId, fecha);
+      
+      // Limpiar cache antiguo
+      _limpiarCacheAntiguo();
 
     } catch (e) {
-      _errorMessage = 'Error al cargar participaciones: ${e.toString()}';
-      print('Error completo cargando participaciones: $e');
+      _setError(_formatError(e.toString()));
     } finally {
-      _isLoading = false;
+      _setLoadingState(false);
+    }
+  }
+
+  // Validar datos de participación
+  bool _validarDatosParticipacion(Map<String, dynamic> data) {
+    return data['id'] != null && 
+           data['estudiante_id'] != null && 
+           data['fecha'] != null &&
+           data['valor'] != null;
+  }
+
+  // Actualizar estado interno
+  void _actualizarEstado(int cursoId, int materiaId, DateTime fecha) {
+    _cursoId = materiaId.toString();
+    _materiaId = materiaId;
+    _fechaSeleccionada = fecha;
+  }
+
+  // Limpiar cache antiguo (mantener solo últimas 10 entradas)
+  void _limpiarCacheAntiguo() {
+    if (_cache.length > 10) {
+      final sortedKeys = _loadTimes.entries
+          .toList()
+          ..sort((a, b) => a.value.compareTo(b.value));
+      
+      // Remover las 5 entradas más antiguas
+      for (int i = 0; i < 5 && i < sortedKeys.length; i++) {
+        final keyToRemove = sortedKeys[i].key;
+        _cache.remove(keyToRemove);
+        _loadTimes.remove(keyToRemove);
+      }
+    }
+  }
+
+  // Métodos optimizados para cambios de estado
+  void _setLoadingState(bool loading) {
+    if (_isLoading != loading) {
+      _isLoading = loading;
       notifyListeners();
     }
   }
 
+  void _setError(String error) {
+    _errorMessage = _formatError(error);
+    notifyListeners();
+  }
+
+  // Formatear errores de forma concisa
+  String _formatError(String error) {
+    final cleanError = error.replaceFirst('Exception: ', '');
+    
+    if (cleanError.contains('timeout')) {
+      return 'Conexión lenta';
+    } else if (cleanError.contains('participacion')) {
+      return 'Error al cargar participaciones';
+    } else if (cleanError.contains('conexión') || cleanError.contains('internet')) {
+      return 'Sin conexión';
+    } else {
+      return cleanError.length > 40 ? '${cleanError.substring(0, 37)}...' : cleanError;
+    }
+  }
+
   void registrarParticipacion(Participacion participacion) {
-    // Buscar si ya existe una participación para ese estudiante, curso y fecha
     final index = _participaciones.indexWhere((p) => 
       p.estudianteId == participacion.estudianteId && 
       p.cursoId == participacion.cursoId && 
@@ -148,23 +216,33 @@ class ParticipacionProvider with ChangeNotifier {
     );
     
     if (index >= 0) {
-      // Actualizar existente
       _participaciones[index] = participacion;
     } else {
-      // Agregar nueva
       _participaciones.add(participacion);
+    }
+    
+    // Actualizar cache local
+    if (_materiaId != null) {
+      final cacheKey = _getCacheKey(int.parse(participacion.cursoId), _materiaId!, participacion.fecha);
+      _cache[cacheKey] = List.from(_participaciones);
     }
     
     notifyListeners();
   }
 
-  void limpiarParticipaciones() {
+  void limpiarParticipaciones({bool preserveCache = false}) {
     _participaciones.clear();
     _errorMessage = null;
+    
+    if (!preserveCache) {
+      _cache.clear();
+      _loadTimes.clear();
+    }
+    
     notifyListeners();
   }
 
-  // Método para obtener estadísticas rápidas
+  // Obtener estadísticas optimizadas
   Map<String, dynamic> getEstadisticasParticipacion(String cursoId, DateTime fecha) {
     final participacionesFecha = participacionesPorCursoYFecha(cursoId, fecha);
     
@@ -180,10 +258,8 @@ class ParticipacionProvider with ChangeNotifier {
     };
   }
 
-  // Método para verificar si hay cambios pendientes de guardar
   bool get tieneCambiosPendientes => _participaciones.isNotEmpty;
 
-  // Obtener participación de un estudiante específico para la fecha actual
   Participacion? getParticipacionEstudiante(String estudianteId, DateTime fecha) {
     try {
       return _participaciones.firstWhere((p) => 
@@ -197,14 +273,9 @@ class ParticipacionProvider with ChangeNotifier {
     }
   }
 
-  // Verificar si hay participaciones cargadas para la fecha y materia actual
   bool tieneParticipacionesCargadas(int cursoId, int materiaId, DateTime fecha) {
-    return _participaciones.any((p) => 
-      p.cursoId == materiaId.toString() && 
-      p.fecha.year == fecha.year && 
-      p.fecha.month == fecha.month && 
-      p.fecha.day == fecha.day
-    );
+    final cacheKey = _getCacheKey(cursoId, materiaId, fecha);
+    return _isCacheFresh(cacheKey) && _cache.containsKey(cacheKey);
   }
 
   // Obtener todas las participaciones de un estudiante para la fecha seleccionada
@@ -219,8 +290,14 @@ class ParticipacionProvider with ChangeNotifier {
 
   // Eliminar participación específica
   void eliminarParticipacion(Participacion participacion) {
-    _participaciones.remove(participacion);
-    notifyListeners();
+    if (_participaciones.remove(participacion)) {
+      // Actualizar cache local
+      if (_materiaId != null) {
+        final cacheKey = _getCacheKey(int.parse(participacion.cursoId), _materiaId!, participacion.fecha);
+        _cache[cacheKey] = List.from(_participaciones);
+      }
+      notifyListeners();
+    }
   }
 
   // Actualizar participación existente
@@ -228,7 +305,33 @@ class ParticipacionProvider with ChangeNotifier {
     final index = _participaciones.indexOf(participacionAnterior);
     if (index >= 0) {
       _participaciones[index] = participacionNueva;
+      
+      // Actualizar cache local
+      if (_materiaId != null) {
+        final cacheKey = _getCacheKey(int.parse(participacionNueva.cursoId), _materiaId!, participacionNueva.fecha);
+        _cache[cacheKey] = List.from(_participaciones);
+      }
+      
       notifyListeners();
     }
   }
+
+  // Invalidar cache específico
+  void invalidarCache({int? cursoId, int? materiaId, DateTime? fecha}) {
+    if (cursoId != null && materiaId != null && fecha != null) {
+      final cacheKey = _getCacheKey(cursoId, materiaId, fecha);
+      _cache.remove(cacheKey);
+      _loadTimes.remove(cacheKey);
+    } else {
+      _cache.clear();
+      _loadTimes.clear();
+    }
+  }
+
+  // Obtener información de cache
+  Map<String, dynamic> get cacheInfo => {
+    'entradas': _cache.length,
+    'ultimasCarga': _loadTimes.map((key, value) => MapEntry(key, value.toIso8601String())),
+    'participacionesCargadas': _participaciones.length,
+  };
 }
