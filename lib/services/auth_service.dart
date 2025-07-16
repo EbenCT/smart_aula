@@ -10,7 +10,8 @@ class AuthService with ChangeNotifier {
   String? _userId;
   String? _token;
   String? _correo;
-  Usuario? _usuario; // Nuevo campo para almacenar datos del usuario
+  String? _userType; // Nuevo campo para tipo de usuario
+  Usuario? _usuario;
 
   final StorageService _storageService = StorageService();
 
@@ -18,7 +19,8 @@ class AuthService with ChangeNotifier {
   String? get userId => _userId;
   String? get token => _token;
   String? get correo => _correo;
-  Usuario? get usuario => _usuario; // Getter para los datos del usuario
+  String? get userType => _userType; // Getter para tipo de usuario
+  Usuario? get usuario => _usuario;
 
   // Constructor que intenta recuperar datos de autenticación guardados
   AuthService() {
@@ -33,6 +35,7 @@ class AuthService with ChangeNotifier {
         _token = authData['token'];
         _userId = authData['userId'];
         _correo = authData['correo'];
+        _userType = authData['userType']; // Recuperar tipo de usuario
         
         // Cargar datos del usuario si existen
         if (authData['usuario'] != null) {
@@ -47,24 +50,19 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // Función para extraer el ID (correo) del token JWT
+  // Función para extraer el ID del token JWT
   String _extractUserIdFromToken(String token) {
     try {
-      // El token JWT tiene 3 partes separadas por puntos: header.payload.signature
       final parts = token.split('.');
       if (parts.length != 3) {
-        return _correo ?? 'unknown'; // Si no podemos decodificar, usamos el correo
+        return _correo ?? 'unknown';
       }
       
-      // Decodificamos la parte del payload (segunda parte)
       String payload = parts[1];
-      // Ajustamos el padding si es necesario
       payload = base64Url.normalize(payload);
       
-      // Decodificamos el payload
       final payloadMap = json.decode(utf8.decode(base64Url.decode(payload)));
       
-      // El JWT típicamente tiene un campo 'sub' (subject) que contiene el identificador
       return payloadMap['sub'] ?? _correo ?? 'unknown';
     } catch (e) {
       print('Error decodificando token: $e');
@@ -72,10 +70,30 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // Obtener datos del usuario desde el endpoint /docentes/yo
-  Future<Usuario> _obtenerDatosUsuario() async {
+  // Obtener datos del usuario según su tipo
+  Future<Usuario?> _obtenerDatosUsuario() async {
+    if (_userType == null) return null;
+    
     try {
-      final url = '${AppConstants.apiBaseUrl}/docentes/yo';
+      String endpoint;
+      
+      // Determinar endpoint según tipo de usuario
+      switch (_userType) {
+        case 'admin':
+        case 'docente':
+          endpoint = '/docentes/yo';
+          break;
+        case 'estudiante':
+          endpoint = '/estudiantes/perfil'; // Asumiendo que existe este endpoint
+          break;
+        case 'padre':
+          endpoint = '/padres/perfil'; // Asumiendo que existe este endpoint
+          break;
+        default:
+          return null;
+      }
+      
+      final url = '${AppConstants.apiBaseUrl}$endpoint';
       
       final response = await http.get(
         Uri.parse(url),
@@ -83,85 +101,65 @@ class AuthService with ChangeNotifier {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',
         },
-      ).timeout(const Duration(seconds: 10), onTimeout: () {
-        throw Exception('Tiempo de espera agotado al obtener datos del usuario.');
-      });
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final userData = json.decode(response.body);
-        return Usuario.fromJson(userData);
-      } else if (response.statusCode == 401) {
-        throw Exception('Token de acceso inválido o expirado');
+        final responseData = json.decode(response.body);
+        return Usuario.fromJson(responseData);
       } else {
-        throw Exception('Error al obtener datos del usuario (código ${response.statusCode})');
+        throw Exception('Error al obtener datos del usuario');
       }
-    } on http.ClientException catch (e) {
-      throw Exception('Error de conexión al obtener datos del usuario: ${e.message}');
-    } on FormatException catch (_) {
-      throw Exception('Error en el formato de respuesta al obtener datos del usuario');
     } catch (e) {
-      throw Exception('Error inesperado al obtener datos del usuario: ${e.toString()}');
+      print('Error obteniendo datos del usuario: $e');
+      return null;
     }
   }
 
+  // Método de login modificado para usar el nuevo endpoint
   Future<void> login(String correo, String contrasena) async {
     try {
-      final url = '${AppConstants.apiBaseUrl}/docentes/login';
+      final url = '${AppConstants.apiBaseUrl}/auth/login'; // Nuevo endpoint
       
       final response = await http.post(
         Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'correo': correo,
           'contrasena': contrasena,
         }),
-      ).timeout(const Duration(seconds: 10), onTimeout: () {
-        throw Exception('Tiempo de espera agotado. El servidor está tardando demasiado en responder.');
-      });
+      ).timeout(const Duration(seconds: 15));
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
         
-        // Guardamos el token de la respuesta
         _token = responseData['access_token'];
-        if (_token == null) {
-          throw Exception('El token de acceso no está presente en la respuesta');
-        }
-        
-        // Extraer el ID del usuario desde el token JWT
-        _userId = _extractUserIdFromToken(_token!);
+        _userId = responseData['user_id']?.toString();
+        _userType = responseData['user_type']; // Obtener tipo de usuario
         _correo = correo;
         
-        // Verificamos si es docente
-        final isDoc = responseData['is_doc'] ?? false;
-        if (!isDoc) {
-          throw Exception('El usuario no tiene permisos de docente');
-        }
-        
-        // Obtener datos completos del usuario
-        try {
-          _usuario = await _obtenerDatosUsuario();
-        } catch (e) {
-          // Si no podemos obtener los datos del usuario, aún permitimos el login
-          // pero logueamos el error
-          print('Advertencia: No se pudieron obtener los datos del usuario: $e');
-          _usuario = null;
+        // Obtener datos completos del usuario si es necesario
+        if (_userType == 'admin' || _userType == 'docente') {
+          try {
+            _usuario = await _obtenerDatosUsuario();
+          } catch (e) {
+            print('Advertencia: No se pudieron obtener los datos del usuario: $e');
+            _usuario = null;
+          }
         }
         
         _isAuthenticated = true;
         
-        // Guardar datos para auto-login (incluyendo datos del usuario)
+        // Guardar datos incluyendo el tipo de usuario
         await _storageService.saveAuthData(
           _userId!, 
           _token!, 
           _correo!,
-          usuario: _usuario, // Pasar los datos del usuario al storage
+          userType: _userType, // Guardar tipo de usuario
+          usuario: _usuario,
         );
         
         notifyListeners();
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
+      } else if (response.statusCode == 401) {
         throw Exception('Credenciales incorrectas');
       } else if (response.statusCode == 404) {
         throw Exception('Servicio de autenticación no encontrado');
@@ -169,7 +167,7 @@ class AuthService with ChangeNotifier {
         String errorMessage;
         try {
           final errorData = json.decode(response.body);
-          errorMessage = errorData['mensaje'] ?? errorData['message'] ?? 
+          errorMessage = errorData['detail'] ?? errorData['message'] ?? 
                         'Error de autenticación (código ${response.statusCode})';
         } catch (e) {
           errorMessage = 'Error de autenticación (código ${response.statusCode})';
@@ -181,13 +179,13 @@ class AuthService with ChangeNotifier {
     } on FormatException catch (_) {
       throw Exception('Error en el formato de respuesta del servidor');
     } on Exception catch (e) {
-      throw e;  // Reenvía excepciones ya formateadas
+      throw e;
     } catch (e) {
       throw Exception('Error inesperado al iniciar sesión: ${e.toString()}');
     }
   }
 
-  // Método para actualizar datos del usuario (útil si se necesita refrescar)
+  // Método para actualizar datos del usuario
   Future<void> actualizarDatosUsuario() async {
     if (!_isAuthenticated || _token == null) {
       throw Exception('Usuario no autenticado');
@@ -196,11 +194,11 @@ class AuthService with ChangeNotifier {
     try {
       _usuario = await _obtenerDatosUsuario();
       
-      // Actualizar datos en storage
       await _storageService.saveAuthData(
         _userId!, 
         _token!, 
         _correo!,
+        userType: _userType,
         usuario: _usuario,
       );
       
@@ -215,9 +213,9 @@ class AuthService with ChangeNotifier {
     _userId = null;
     _token = null;
     _correo = null;
-    _usuario = null; // Limpiar datos del usuario
+    _userType = null; // Limpiar tipo de usuario
+    _usuario = null;
     
-    // Eliminar datos guardados
     await _storageService.clearAuthData();
     
     notifyListeners();
