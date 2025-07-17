@@ -13,6 +13,7 @@ import '../models/estudiante.dart';
 import '../models/asistencia.dart';
 import '../models/participacion.dart';
 import '../models/prediccion_completa.dart';
+import './padre_api_service.dart'; 
 
 class ApiService {
   final AuthService _authService;
@@ -24,6 +25,7 @@ class ApiService {
   late final ResumenApiService resumen;
   late final ResumenEstudianteApiService resumenEstudiante;
   late final PrediccionCompletaApiService prediccionesCompletas;
+   late final PadreApiService padres;
   
   ApiService(this._authService) {
     cursos = CursoApiService(_authService);
@@ -33,7 +35,15 @@ class ApiService {
     resumen = ResumenApiService(_authService);
     resumenEstudiante = ResumenEstudianteApiService(_authService);
     prediccionesCompletas = PrediccionCompletaApiService(_authService);
+    padres = PadreApiService(_authService);
   }
+    // SERVICIOS PARA PADRES
+  // Obtener lista de hijos del padre autenticado
+  Future<List<Estudiante>> getMisHijos() => padres.getMisHijos();
+  
+  // Refrescar lista de hijos
+  Future<List<Estudiante>> refrescarHijos() => padres.refrescarHijos();
+
 
   // PREDICCIONES COMPLETAS
   Future<List<PrediccionCompleta>> getPrediccionesCompletas({
