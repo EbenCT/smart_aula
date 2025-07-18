@@ -46,4 +46,14 @@ class EstudianteApiService extends BaseApiService {
       throw Exception('Error al actualizar el estudiante: $e');
     }
   }
+
+  // OBTENER DASHBOARD ACADÉMICO DEL ESTUDIANTE
+Future<Map<String, dynamic>> getDashboardEstudiante() async {
+  try {
+    final response = await get('/estudiantes/dashboard-academico');
+    return response as Map<String, dynamic>;
+  } catch (e) {
+    throw Exception('Error al obtener dashboard del estudiante: $e');
+  }
+}
 }

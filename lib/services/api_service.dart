@@ -1,4 +1,6 @@
 // lib/services/api_service.dart
+import 'package:flutter/material.dart';
+
 import './auth_service.dart';
 import './curso_api_service.dart';
 import './estudiante_api_service.dart';
@@ -277,4 +279,7 @@ class ApiService {
     // Para compatibilidad - no hace nada por ahora
     await Future.delayed(const Duration(milliseconds: 100));
   }
+// DASHBOARD ESTUDIANTE
+Future<Map<String, dynamic>> getDashboardEstudiante() => 
+    estudiantes.getDashboardEstudiante();
 }
