@@ -1,11 +1,14 @@
+// lib/screens/padre/padre_home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../services/auth_service.dart';
-import '../../services/api_service.dart';
 import '../../models/estudiante.dart';
-import '../../widgets/theme_toggle_button.dart';
-import '../../widgets/hijo_card_widget.dart';
+import '../../services/padre_api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/empty_state_widget.dart';
+import '../../widgets/avatar_widget.dart';
+import '../../widgets/info_chip_widget.dart';
+import '../../utils/debug_logger.dart';
+import './info_academica_hijo_screen.dart'; // Nueva importación
 
 class PadreHomeScreen extends StatefulWidget {
   static const routeName = '/padre-home';
@@ -16,137 +19,132 @@ class PadreHomeScreen extends StatefulWidget {
   _PadreHomeScreenState createState() => _PadreHomeScreenState();
 }
 
-class _PadreHomeScreenState extends State<PadreHomeScreen> {
+class _PadreHomeScreenState extends State<PadreHomeScreen> 
+    with AutomaticKeepAliveClientMixin {
+  
   List<Estudiante>? _hijos;
-  bool _isLoading = true;
+  bool _isLoading = false;
   String? _errorMessage;
-  late ApiService _apiService;
+  late PadreApiService _padreApiService;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-    _initializeApiService();
-  }
-
-  void _initializeApiService() {
     final authService = Provider.of<AuthService>(context, listen: false);
-    _apiService = ApiService(authService);
-    _cargarHijos();
+    _padreApiService = PadreApiService(authService);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cargarHijos();
+    });
   }
 
   Future<void> _cargarHijos() async {
-    if (!mounted) return;
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final hijos = await _apiService.getMisHijos();
+      DebugLogger.info('Cargando lista de hijos', tag: 'PADRE_HOME');
+      final hijos = await _padreApiService.getMisHijos();
       
-      if (mounted) {
-        setState(() {
-          _hijos = hijos;
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _hijos = hijos;
+        _isLoading = false;
+      });
+      
+      DebugLogger.info('Hijos cargados exitosamente: ${hijos.length}', tag: 'PADRE_HOME');
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = e.toString();
-          _isLoading = false;
-        });
-      }
+      DebugLogger.error('Error cargando hijos: $e', tag: 'PADRE_HOME');
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
     }
   }
 
   Future<void> _refrescarHijos() async {
-    try {
-      final hijos = await _apiService.refrescarHijos();
-      
-      if (mounted) {
-        setState(() {
-          _hijos = hijos;
-          _errorMessage = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al refrescar: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    await _cargarHijos();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthService>(
-      builder: (context, authService, child) {
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Mis Hijos'),
-            backgroundColor: Theme.of(context).primaryColor,
-            foregroundColor: Colors.white,
-            actions: [
-              const ThemeToggleButton(),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _refrescarHijos,
-                tooltip: 'Refrescar',
-              ),
-              IconButton(
-                icon: const Icon(Icons.logout),
-                onPressed: () => _showLogoutDialog(context, authService),
-                tooltip: 'Cerrar Sesión',
+    super.build(context);
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
+        title: const Text(
+          'Mis Hijos',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refrescarHijos,
+            tooltip: 'Actualizar lista',
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'logout') {
+                _showLogoutDialog();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Cerrar Sesión'),
+                  ],
+                ),
               ),
             ],
           ),
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Theme.of(context).primaryColor.withOpacity(0.1),
-                  Theme.of(context).scaffoldBackgroundColor,
-                ],
-              ),
-            ),
-            child: Column(
-              children: [
-                // Header con información del padre
-                _buildHeaderInfo(authService),
-                
-                // Lista de hijos
-                Expanded(
-                  child: _buildHijosContent(),
-                ),
-              ],
-            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Header con información del padre
+          _buildHeaderCard(),
+          
+          // Contenido principal
+          Expanded(
+            child: _buildHijosContent(),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  Widget _buildHeaderInfo(AuthService authService) {
+  Widget _buildHeaderCard() {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    
     return Container(
+      width: double.infinity,
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).primaryColor,
+            Theme.of(context).primaryColor.withOpacity(0.8),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).shadowColor.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+            color: Theme.of(context).primaryColor.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -155,13 +153,13 @@ class _PadreHomeScreenState extends State<PadreHomeScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withOpacity(0.1),
+              color: Colors.white.withOpacity(0.2),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.family_restroom,
               size: 32,
-              color: Theme.of(context).primaryColor,
+              color: Colors.white,
             ),
           ),
           const SizedBox(width: 16),
@@ -174,7 +172,7 @@ class _PadreHomeScreenState extends State<PadreHomeScreen> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(context).textTheme.titleLarge?.color,
+                    color: Colors.white,
                   ),
                 ),
                 if (authService.correo != null) ...[
@@ -183,10 +181,20 @@ class _PadreHomeScreenState extends State<PadreHomeScreen> {
                     authService.correo!,
                     style: TextStyle(
                       fontSize: 14,
-                      color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                      color: Colors.white70,
                     ),
                   ),
                 ],
+                const SizedBox(height: 8),
+                Text(
+                  _hijos != null 
+                      ? '${_hijos!.length} hijo${_hijos!.length == 1 ? '' : 's'} registrado${_hijos!.length == 1 ? '' : 's'}'
+                      : 'Cargando información...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                  ),
+                ),
               ],
             ),
           ),
@@ -266,72 +274,129 @@ class _PadreHomeScreenState extends State<PadreHomeScreen> {
     return RefreshIndicator(
       onRefresh: _refrescarHijos,
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         itemCount: _hijos!.length,
         itemBuilder: (context, index) {
           final hijo = _hijos![index];
-          return HijoCardWidget(
-            hijo: hijo,
-            onTap: () => _mostrarDetalleHijo(hijo),
-          );
+          return _buildHijoCard(hijo);
         },
       ),
     );
   }
 
-  void _mostrarDetalleHijo(Estudiante hijo) {
-    // Por ahora mostrar un diálogo con la información del hijo
-    // En el futuro se puede navegar a una pantalla de detalle
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(hijo.nombreCompleto),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildInfoRow('Fecha de Nacimiento', 
-                '${hijo.fechaNacimiento.day}/${hijo.fechaNacimiento.month}/${hijo.fechaNacimiento.year}'),
-            _buildInfoRow('Género', hijo.genero),
-            _buildInfoRow('Correo', hijo.email),
-            if (hijo.direccionCasa.isNotEmpty)
-              _buildInfoRow('Dirección', hijo.direccionCasa),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cerrar'),
-          ),
-        ],
+  Widget _buildHijoCard(Estudiante hijo) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
       ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _navigateToInfoAcademica(hijo), // Nueva navegación
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Avatar del estudiante
+              AvatarWidget(
+                nombre: hijo.nombre,
+                apellido: hijo.apellido,
+                backgroundColor: Theme.of(context).primaryColor,
+                radius: 30,
               ),
-            ),
+              const SizedBox(width: 16),
+              
+              // Información del estudiante
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hijo.nombreCompleto,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.badge,
+                          size: 16,
+                          color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          hijo.codigo,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.email_outlined,
+                          size: 16,
+                          color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            hijo.email ?? 'Sin correo',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Indicador de navegación
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.school,
+                  color: Theme.of(context).primaryColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right,
+                color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
+              ),
+            ],
           ),
-          Expanded(
-            child: Text(value),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  void _showLogoutDialog(BuildContext context, AuthService authService) {
+  // Método para navegar a la información académica del hijo
+  void _navigateToInfoAcademica(Estudiante hijo) {
+    DebugLogger.info('Navegando a información académica del hijo: ${hijo.nombreCompleto}', tag: 'PADRE_HOME');
+    
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => InfoAcademicaHijoScreen(hijo: hijo),
+      ),
+    );
+  }
+
+  void _showLogoutDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -340,15 +405,18 @@ class _PadreHomeScreenState extends State<PadreHomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('CANCELAR'),
+            child: const Text('Cancelar'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              authService.logout();
+              Provider.of<AuthService>(context, listen: false).logout();
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('CERRAR SESIÓN'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Cerrar Sesión'),
           ),
         ],
       ),
