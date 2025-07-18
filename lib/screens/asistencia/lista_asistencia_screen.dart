@@ -14,6 +14,8 @@ import '../../widgets/date_selector_widget.dart';
 import '../../widgets/asistencia_item.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/location_service.dart';
+import '../../services/sesion_asistencia_service.dart';
 
 class ListaAsistenciaScreen extends StatefulWidget {
   static const routeName = '/asistencia';
@@ -30,13 +32,18 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
   bool _isSaving = false;
   String _searchQuery = '';
   bool _localeInitialized = false;
+  bool _isCreatingSession = false;
+  late SesionAsistenciaService _sesionService;
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _initializeLocale();
+  // Inicializar el servicio de sesiones
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      _sesionService = SesionAsistenciaService(authService);
       _cargarAsistencia();
     });
   }
@@ -102,6 +109,84 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
       }
     }
   }
+
+// Agregar este método para crear sesión automática
+Future<void> _crearSesionAutomatica() async {
+  if (!mounted) return;
+  
+  final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
+  
+  if (!cursoProvider.tieneSeleccionCompleta) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Seleccione un curso y materia primero'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    return;
+  }
+
+  setState(() {
+    _isCreatingSession = true;
+  });
+
+  try {
+    // Obtener ubicación actual
+    final location = await LocationService.instance.getCurrentLocation();
+    
+    if (location == null) {
+      throw Exception('No se pudo obtener la ubicación. Verifique los permisos.');
+    }
+
+    // Crear sesión automática
+    final resultado = await _sesionService.crearSesionAutomatica(
+      cursoId: cursoProvider.cursoSeleccionado!.id,
+      materiaId: cursoProvider.materiaSeleccionada!.id,
+      latitud: location['latitude']!,
+      longitud: location['longitude']!,
+    );
+
+    if (resultado != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('✅ Sesión creada exitosamente'),
+              Text(
+                'Los estudiantes ya pueden marcar asistencia automáticamente',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.green.shade100,
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isCreatingSession = false;
+      });
+    }
+  }
+}
 
   void _onDateChanged(DateTime newDate) {
     setState(() {
@@ -218,75 +303,7 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
                 searchValue: _searchQuery,
                 additionalWidget: Column(
                   children: [
-                    // Información de la materia
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.school,
-                            color: Theme.of(context).primaryColor,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  materiaSeleccionada.nombre,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).primaryColor,
-                                  ),
-                                ),
-                                Text(
-                                  cursoSeleccionado!.nombreCompleto,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context).textTheme.bodySmall?.color,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Indicador de datos cargados
-                          if (asistencias.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.cloud_download,
-                                    size: 14,
-                                    color: Colors.green.shade700,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Cargado',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.green.shade700,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Selector de fecha
+// Selector de fecha
                     DateSelectorWidget(
                       selectedDate: _fechaSeleccionada,
                       onDateChanged: _onDateChanged,
@@ -296,10 +313,92 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
                 ),
               ),
               
-              // Resumen de asistencia
-              if (estudiantes.isNotEmpty)
-                _buildResumenAsistencia(asistencias, estudiantes.length),
-              
+              Card(
+  margin: const EdgeInsets.all(16),
+  elevation: 2,
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  child: Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.location_on,
+              color: Theme.of(context).primaryColor,
+              size: 24,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Asistencia Automática',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Los estudiantes podrán marcar asistencia automáticamente usando GPS',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isCreatingSession ? null : _crearSesionAutomatica,
+            icon: _isCreatingSession
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.play_arrow),
+            label: Text(_isCreatingSession ? 'Creando sesión...' : 'Iniciar Sesión GPS'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+
+// Y también agregar un divisor visual para separar las dos funcionalidades:
+Container(
+  margin: const EdgeInsets.symmetric(horizontal: 16),
+  child: Row(
+    children: [
+      const Expanded(child: Divider()),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Text(
+          'O registrar asistencia manual',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+      const Expanded(child: Divider()),
+    ],
+  ),
+),
+
               // Lista de estudiantes
               Expanded(
                 child: _isLoading || asistenciaProvider.isLoading
@@ -348,58 +447,6 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildResumenAsistencia(List<Asistencia> asistencias, int totalEstudiantes) {
-    int presentes = asistencias.where((a) => a.estado == EstadoAsistencia.presente).length;
-    int tardanzas = asistencias.where((a) => a.estado == EstadoAsistencia.tardanza).length;
-    int ausentes = asistencias.where((a) => a.estado == EstadoAsistencia.ausente).length;
-    int justificados = asistencias.where((a) => a.estado == EstadoAsistencia.justificado).length;
-
-    // Calcular ausentes reales (estudiantes sin registro de asistencia)
-    int ausentesReales = totalEstudiantes - asistencias.length + ausentes;
-
-    final stats = [
-      SummaryStat(title: 'Presentes', count: presentes, color: Colors.green),
-      SummaryStat(title: 'Tardes', count: tardanzas, color: Colors.amber),
-      SummaryStat(title: 'Ausentes', count: ausentesReales, color: Colors.red),
-      SummaryStat(title: 'Justificados', count: justificados, color: Colors.blue),
-    ];
-
-    final porcentajeAsistencia = totalEstudiantes > 0 
-        ? ((presentes + tardanzas + justificados) * 100 / totalEstudiantes)
-        : 0.0;
-
-    return SummaryStatsWidget(
-      title: 'Resumen de Asistencia',
-      stats: stats,
-      additionalInfo: Column(
-        children: [
-          LinearProgressIndicator(
-            value: totalEstudiantes > 0 ? (presentes + tardanzas + justificados) / totalEstudiantes : 0,
-            backgroundColor: Theme.of(context).dividerColor.withOpacity(0.3),
-            color: Colors.green,
-            minHeight: 8,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Asistencia general: ${porcentajeAsistencia.toStringAsFixed(0)}%',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          if (asistencias.isNotEmpty)
-            Text(
-              'Datos cargados desde el servidor',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.green.shade700,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-        ],
-      ),
     );
   }
 
