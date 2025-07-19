@@ -34,7 +34,7 @@ class SesionAsistenciaService {
         "curso_id": cursoId,
         "materia_id": materiaId,
         "periodo_id": null, // Se detecta automáticamente
-        "duracion_minutos": 60,
+        "duracion_minutos": 10,
         "radio_permitido_metros": 100,
         "permite_asistencia_tardia": true,
         "minutos_tolerancia": 15,

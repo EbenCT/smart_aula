@@ -60,34 +60,459 @@ class _EstudianteHomeScreenState extends State<EstudianteHomeScreen> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
-    return Consumer<AuthService>(
-      builder: (context, authService, child) {
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Portal Estudiante'),
-            backgroundColor: Theme.of(context).primaryColor,
-            foregroundColor: Colors.white,
-            actions: [
-              const ThemeToggleButton(),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _cargarDashboard,
-                tooltip: 'Actualizar',
+    //super.build(context);
+    
+    if (_isLoading && _dashboard == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('Cargando dashboard...'),
+          ],
+        ),
+      );
+    }
+
+    if (_error != null && _dashboard == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 72,
+              color: Colors.red,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _error!,
+              style: const TextStyle(color: Colors.red, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _cargarDashboard,
+              child: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_dashboard == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.school_outlined,
+              size: 72,
+              color: Theme.of(context).disabledColor,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No hay información disponible',
+              style: TextStyle(
+                fontSize: 18,
+                color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6),
               ),
-              IconButton(
-                icon: const Icon(Icons.logout),
-                onPressed: () => _showLogoutDialog(context, authService),
-                tooltip: 'Cerrar Sesión',
-              ),
-            ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: _cargarDashboard,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header - reutilizando el estilo del dashboard del profesor
+                _buildHeaderCard(),
+                
+                const SizedBox(height: 16),
+                
+                // Estadísticas principales - reutilizando ResumenCard
+                _buildMainStatsCards(),
+                
+                const SizedBox(height: 16),
+                
+                // Estadísticas detalladas - reutilizando ResumenCard
+                _buildDetailedStatsCards(),
+                
+                const SizedBox(height: 24),
+                
+                // Lista de materias - reutilizando el estilo de estudiantes
+                _buildMateriasSection(isDarkMode),
+                
+                const SizedBox(height: 24),
+                
+                // NUEVO: Botón para marcar asistencia
+                _buildMarcarAsistenciaButton(),
+                
+                const SizedBox(height: 80),
+              ],
+            ),
           ),
-          body: _buildBody(),
-        );
-      },
+        ),
+      ),
     );
   }
 
+// Agregar estos nuevos métodos al final de la clase _EstudianteHomeScreenState:
+
+  // Construir el botón para marcar asistencia
+  Widget _buildMarcarAsistenciaButton() {
+    return Container(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _mostrarSesionesActivas,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Theme.of(context).primaryColor,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 2,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.how_to_reg, size: 24),
+            const SizedBox(width: 12),
+            Text(
+              'Marcar Asistencia',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Mostrar las sesiones activas
+  Future<void> _mostrarSesionesActivas() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final apiService = ApiService(authService);
+
+    // Mostrar indicador de carga
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text('Cargando sesiones activas...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final sesionesActivas = await apiService.estudiantes.getSesionesActivas();
+      
+      // Cerrar indicador de carga
+      Navigator.of(context).pop();
+      
+      if (sesionesActivas.isEmpty) {
+        // No hay sesiones activas
+        _mostrarMensajeNoSesiones();
+      } else {
+        // Mostrar sesiones activas
+        _mostrarModalSesionesActivas(sesionesActivas);
+      }
+    } catch (e) {
+      // Cerrar indicador de carga
+      Navigator.of(context).pop();
+      
+      // Mostrar error
+      _mostrarErrorSesiones(e.toString());
+    }
+  }
+
+  // Mostrar mensaje cuando no hay sesiones activas
+  void _mostrarMensajeNoSesiones() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue),
+            const SizedBox(width: 8),
+            Text('Sin sesiones activas'),
+          ],
+        ),
+        content: Text('No hay sesiones de asistencia activas en este momento.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Mostrar error al cargar sesiones
+  void _mostrarErrorSesiones(String error) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red),
+            const SizedBox(width: 8),
+            Text('Error'),
+          ],
+        ),
+        content: Text('Error al cargar las sesiones activas: $error'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Mostrar modal con las sesiones activas
+  void _mostrarModalSesionesActivas(List<Map<String, dynamic>> sesiones) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+            maxWidth: MediaQuery.of(context).size.width * 0.9,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header del modal
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.how_to_reg, color: Colors.white, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Sesiones de Asistencia Activas',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(Icons.close, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Lista de sesiones
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: sesiones.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final sesion = sesiones[index];
+                    return _buildSesionCard(sesion);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Construir card para cada sesión
+  Widget _buildSesionCard(Map<String, dynamic> sesion) {
+    final materia = sesion['materia'] ?? {};
+    final docente = sesion['docente'] ?? {};
+    final miAsistencia = sesion['mi_asistencia'];
+    
+    // Verificar si ya marcó asistencia
+    final yaMarcoAsistencia = miAsistencia != null;
+    
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Título de la sesión
+            Text(
+              sesion['titulo'] ?? 'Sesión de Asistencia',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).primaryColor,
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Información de la materia
+            Row(
+              children: [
+                Icon(Icons.book, size: 20, color: Colors.grey[600]),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Materia: ${materia['nombre'] ?? 'No especificada'}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // Información del docente
+            Row(
+              children: [
+                Icon(Icons.person, size: 20, color: Colors.grey[600]),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Docente: ${docente['nombre'] ?? ''} ${docente['apellido'] ?? ''}',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Estado de asistencia y botón
+            if (yaMarcoAsistencia) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Asistencia ya marcada',
+                      style: TextStyle(
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => _marcarAsistencia(sesion),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.how_to_reg, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Marcar Asistencia',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Marcar asistencia (placeholder para la funcionalidad futura)
+  void _marcarAsistencia(Map<String, dynamic> sesion) {
+    // Cerrar el modal actual
+    Navigator.of(context).pop();
+    
+    // Mostrar mensaje temporal
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Función de marcar asistencia será implementada próximamente'),
+        backgroundColor: Colors.orange,
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
+      ),
+    );
+    
+    // TODO: Aquí implementarás la lógica para marcar asistencia
+    // según las instrucciones que me darás después
+  }
   Widget _buildBody() {
     if (_isLoading && _dashboard == null) {
       return const Center(

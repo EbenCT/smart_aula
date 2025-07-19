@@ -4,7 +4,7 @@ import '../models/curso.dart';
 import '../models/materia.dart';
 import '../services/api_service.dart';
 
-class CursoProvider with ChangeNotifier {
+class  CursoProvider with ChangeNotifier {
   final ApiService _apiService;
   
   Curso? _cursoSeleccionado;

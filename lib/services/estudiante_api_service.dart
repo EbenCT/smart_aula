@@ -47,6 +47,20 @@ class EstudianteApiService extends BaseApiService {
     }
   }
 
+    // OBTENER SESIONES ACTIVAS PARA MARCAR ASISTENCIA
+  Future<List<Map<String, dynamic>>> getSesionesActivas() async {
+    try {
+      final response = await get('/asistencia/estudiante/sesiones-activas');
+      if (response is List) {
+        return List<Map<String, dynamic>>.from(response);
+      } else {
+        throw Exception('Formato de respuesta inesperado');
+      }
+    } catch (e) {
+      throw Exception('Error al obtener sesiones activas: $e');
+    }
+  }
+
   // OBTENER DASHBOARD ACADÉMICO DEL ESTUDIANTE
 Future<Map<String, dynamic>> getDashboardEstudiante() async {
   try {
