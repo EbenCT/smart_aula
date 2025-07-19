@@ -47,7 +47,7 @@ class EstudianteApiService extends BaseApiService {
     }
   }
 
-    // OBTENER SESIONES ACTIVAS PARA MARCAR ASISTENCIA
+  // OBTENER SESIONES ACTIVAS PARA MARCAR ASISTENCIA
   Future<List<Map<String, dynamic>>> getSesionesActivas() async {
     try {
       final response = await get('/asistencia/estudiante/sesiones-activas');
@@ -61,13 +61,34 @@ class EstudianteApiService extends BaseApiService {
     }
   }
 
-  // OBTENER DASHBOARD ACADÉMICO DEL ESTUDIANTE
-Future<Map<String, dynamic>> getDashboardEstudiante() async {
-  try {
-    final response = await get('/estudiantes/dashboard-academico');
-    return response as Map<String, dynamic>;
-  } catch (e) {
-    throw Exception('Error al obtener dashboard del estudiante: $e');
+  // MARCAR ASISTENCIA EN UNA SESIÓN
+  Future<Map<String, dynamic>> marcarAsistencia(
+    int sesionId, 
+    double latitud, 
+    double longitud, 
+    {String observaciones = 'presente'}
+  ) async {
+    try {
+      final datos = {
+        'latitud_estudiante': latitud,
+        'longitud_estudiante': longitud,
+        'observaciones': observaciones,
+      };
+      
+      final response = await post('/asistencia/estudiante/sesiones/$sesionId/marcar', datos);
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      throw Exception('Error al marcar asistencia: $e');
+    }
   }
-}
+
+  // OBTENER DASHBOARD ACADÉMICO DEL ESTUDIANTE
+  Future<Map<String, dynamic>> getDashboardEstudiante() async {
+    try {
+      final response = await get('/estudiantes/dashboard-academico');
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      throw Exception('Error al obtener dashboard del estudiante: $e');
+    }
+  }
 }

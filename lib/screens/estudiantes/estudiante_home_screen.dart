@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
+import '../../services/location_service.dart';
 import '../../widgets/theme_toggle_button.dart';
 import '../../widgets/resumen_card.dart';
 import '../../models/dashboard_estudiante.dart';
 import '../../screens/estudiantes/detalle_materia_estudiante_screen.dart';
+import '../../utils/debug_logger.dart';
 
 class EstudianteHomeScreen extends StatefulWidget {
   static const routeName = '/estudiante-home';
@@ -426,9 +428,6 @@ class _EstudianteHomeScreenState extends State<EstudianteHomeScreen> {
 
   // Mostrar las sesiones activas
   Future<void> _mostrarSesionesActivas() async {
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final apiService = ApiService(authService);
-
     // Mostrar indicador de carga
     showDialog(
       context: context,
@@ -451,7 +450,7 @@ class _EstudianteHomeScreenState extends State<EstudianteHomeScreen> {
     );
 
     try {
-      final sesionesActivas = await apiService.estudiantes.getSesionesActivas();
+      final sesionesActivas = await _apiService.estudiantes.getSesionesActivas();
       
       // Cerrar indicador de carga
       Navigator.of(context).pop();
@@ -713,26 +712,120 @@ class _EstudianteHomeScreenState extends State<EstudianteHomeScreen> {
     );
   }
 
-  // Marcar asistencia (placeholder para la funcionalidad futura)
-  void _marcarAsistencia(Map<String, dynamic> sesion) {
-    // Cerrar el modal actual
-    Navigator.of(context).pop();
-    
-    // Mostrar mensaje temporal
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Función de marcar asistencia será implementada próximamente'),
-        backgroundColor: Colors.orange,
-        action: SnackBarAction(
-          label: 'OK',
-          textColor: Colors.white,
-          onPressed: () {},
+  // Marcar asistencia - IMPLEMENTACIÓN COMPLETA
+  Future<void> _marcarAsistencia(Map<String, dynamic> sesion) async {
+    try {
+      // Cerrar el modal actual
+      Navigator.of(context).pop();
+      
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text('Obteniendo ubicación...'),
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
-    );
-    
-    // TODO: Aquí implementarás la lógica para marcar asistencia
-    // según las instrucciones que me darás después
+      );
+
+      // Obtener ubicación del usuario
+      final location = await LocationService.instance.getCurrentLocation();
+      
+      if (location == null) {
+        Navigator.of(context).pop(); // Cerrar indicador de carga
+        throw Exception('No se pudo obtener la ubicación. Verifique los permisos.');
+      }
+
+      // Actualizar mensaje de carga
+      Navigator.of(context).pop(); // Cerrar indicador anterior
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text('Marcando asistencia...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Marcar asistencia usando el API
+      final resultado = await _apiService.estudiantes.marcarAsistencia(
+        sesion['id'],
+        location['latitude']!,
+        location['longitude']!,
+        observaciones: 'presente',
+      );
+
+      // Cerrar indicador de carga
+      Navigator.of(context).pop();
+
+      // Mostrar resultado exitoso
+      if (resultado['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '✅ ${resultado['message'] ?? 'Asistencia marcada exitosamente'}',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                if (resultado['es_tardanza'] == true)
+                  Text(
+                    'Nota: Marcada como tardanza',
+                    style: TextStyle(fontSize: 12, color: Colors.green.shade100),
+                  ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        throw Exception(resultado['message'] ?? 'Error desconocido al marcar asistencia');
+      }
+
+    } catch (e) {
+      // Cerrar cualquier diálogo abierto
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      // Mostrar error
+      DebugLogger.error('Error al marcar asistencia: $e');
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   // Métodos de color
