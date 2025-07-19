@@ -1,5 +1,7 @@
-package com.example.smart_aula
+package com.example.smart_aula  // ← TU PACKAGE NAME
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity: FlutterActivity()
+class MainActivity: FlutterFragmentActivity() {
+    // Extiende FlutterFragmentActivity en lugar de FlutterActivity
+}

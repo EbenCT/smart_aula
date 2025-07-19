@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
+import '../../services/biometric_service.dart';
 import '../../widgets/theme_toggle_button.dart';
 import '../../widgets/resumen_card.dart';
 import '../../models/dashboard_estudiante.dart';
@@ -426,30 +427,48 @@ class _EstudianteHomeScreenState extends State<EstudianteHomeScreen> {
     );
   }
 
-  // Mostrar las sesiones activas
+  // Mostrar las sesiones activas CON AUTENTICACIÓN BIOMÉTRICA
   Future<void> _mostrarSesionesActivas() async {
-    // Mostrar indicador de carga
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Center(
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text('Cargando sesiones activas...'),
-              ],
+    try {
+      // PASO 1: Autenticación biométrica
+      DebugLogger.info('Iniciando autenticación biométrica para marcar asistencia');
+      
+      final biometricResult = await BiometricService.instance.authenticate(
+        reason: 'Verificar tu identidad para marcar asistencia',
+        useErrorDialogs: true,
+        stickyAuth: true,
+      );
+
+      // Si la autenticación no fue exitosa, mostrar error y salir
+      if (!biometricResult.isSuccess) {
+        _mostrarErrorBiometrico(biometricResult);
+        return;
+      }
+
+      // PASO 2: Si la autenticación fue exitosa, continuar con el flujo normal
+      DebugLogger.info('Autenticación biométrica exitosa, cargando sesiones...');
+      
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text('Cargando sesiones activas...'),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    try {
       final sesionesActivas = await _apiService.estudiantes.getSesionesActivas();
       
       // Cerrar indicador de carga
@@ -463,12 +482,90 @@ class _EstudianteHomeScreenState extends State<EstudianteHomeScreen> {
         _mostrarModalSesionesActivas(sesionesActivas);
       }
     } catch (e) {
-      // Cerrar indicador de carga
-      Navigator.of(context).pop();
+      // Cerrar cualquier diálogo abierto
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
       
       // Mostrar error
       _mostrarErrorSesiones(e.toString());
     }
+  }
+
+  // Mostrar error biométrico
+  void _mostrarErrorBiometrico(BiometricResult result) {
+    Color iconColor = Colors.orange;
+    IconData iconData = Icons.fingerprint;
+    String title = 'Autenticación Requerida';
+
+    // Personalizar según el tipo de error
+    switch (result.type) {
+      case BiometricResultType.cancelled:
+        iconColor = Colors.blue;
+        iconData = Icons.cancel_outlined;
+        title = 'Autenticación Cancelada';
+        break;
+      case BiometricResultType.notAvailable:
+        iconColor = Colors.grey;
+        iconData = Icons.warning_outlined;
+        title = 'Biometría No Disponible';
+        break;
+      case BiometricResultType.notEnrolled:
+        iconColor = Colors.orange;
+        iconData = Icons.fingerprint_outlined;
+        title = 'Configurar Huella Digital';
+        break;
+      case BiometricResultType.lockedOut:
+      case BiometricResultType.permanentlyLockedOut:
+        iconColor = Colors.red;
+        iconData = Icons.lock_outlined;
+        title = 'Biometría Bloqueada';
+        break;
+      case BiometricResultType.error:
+        iconColor = Colors.red;
+        iconData = Icons.error_outline;
+        title = 'Error de Autenticación';
+        break;
+      default:
+        break;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(iconData, color: iconColor),
+            const SizedBox(width: 8),
+            Text(title),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(result.message ?? 'Error desconocido'),
+            if (result.type == BiometricResultType.notEnrolled) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Para usar esta función, configura tu huella digital en los ajustes del dispositivo.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Entendido'),
+          ),
+        ],
+      ),
+    );
   }
 
   // Mostrar mensaje cuando no hay sesiones activas
