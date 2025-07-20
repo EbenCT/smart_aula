@@ -953,7 +953,6 @@ class _EstudianteHomeScreenState extends State<EstudianteHomeScreen> {
     );
 
     final materia = materiaData['materia'];
-    final docente = materiaData['docente'];
 
     // Navegar a la nueva pantalla específica para estudiantes
     Navigator.of(context).push(

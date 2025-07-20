@@ -9,7 +9,6 @@ import '../../models/asistencia.dart';
 import '../../utils/debug_logger.dart';
 import '../../widgets/search_header_widget.dart';
 import '../../widgets/empty_state_widget.dart';
-import '../../widgets/summary_stats_widget.dart';
 import '../../widgets/date_selector_widget.dart';
 import '../../widgets/asistencia_item.dart';
 import '../../services/api_service.dart';

@@ -6,7 +6,6 @@ import '../../services/padre_api_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../../widgets/avatar_widget.dart';
-import '../../widgets/info_chip_widget.dart';
 import '../../utils/debug_logger.dart';
 import './info_academica_hijo_screen.dart'; // Nueva importación
 
@@ -347,7 +346,7 @@ class _PadreHomeScreenState extends State<PadreHomeScreen>
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            hijo.email ?? 'Sin correo',
+                            hijo.email,
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
                             ),

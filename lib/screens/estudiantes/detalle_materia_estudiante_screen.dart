@@ -1,4 +1,6 @@
 // lib/screens/estudiantes/detalle_materia_estudiante_screen.dart
+// ignore_for_file: dead_code
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/resumen_estudiante_provider.dart';

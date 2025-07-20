@@ -462,7 +462,7 @@ class _InfoAcademicaHijoScreenState extends State<InfoAcademicaHijoScreen> {
                     ],
                     Text(
                       tieneDocente 
-                          ? 'Prof. ${docente!.nombre} ${docente.apellido}'
+                          ? 'Prof. ${docente.nombre} ${docente.apellido}'
                           : 'Sin docente asignado',
                       style: TextStyle(
                         color: tieneDocente 
