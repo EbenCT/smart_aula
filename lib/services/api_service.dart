@@ -1,6 +1,4 @@
 // lib/services/api_service.dart
-import 'package:flutter/material.dart';
-
 import './auth_service.dart';
 import './curso_api_service.dart';
 import './estudiante_api_service.dart';
@@ -15,7 +13,8 @@ import '../models/estudiante.dart';
 import '../models/asistencia.dart';
 import '../models/participacion.dart';
 import '../models/prediccion_completa.dart';
-import './padre_api_service.dart'; 
+import './padre_api_service.dart';
+import 'notification_api_service.dart'; 
 
 class ApiService {
   final AuthService _authService;
@@ -27,7 +26,8 @@ class ApiService {
   late final ResumenApiService resumen;
   late final ResumenEstudianteApiService resumenEstudiante;
   late final PrediccionCompletaApiService prediccionesCompletas;
-   late final PadreApiService padres;
+  late final PadreApiService padres;
+  late final NotificationApiService notificaciones;
   
   ApiService(this._authService) {
     cursos = CursoApiService(_authService);
@@ -38,6 +38,7 @@ class ApiService {
     resumenEstudiante = ResumenEstudianteApiService(_authService);
     prediccionesCompletas = PrediccionCompletaApiService(_authService);
     padres = PadreApiService(_authService);
+    notificaciones = NotificationApiService(_authService);
   }
     // SERVICIOS PARA PADRES
   // Obtener lista de hijos del padre autenticado
@@ -46,6 +47,23 @@ class ApiService {
   // Refrescar lista de hijos
   Future<List<Estudiante>> refrescarHijos() => padres.refrescarHijos();
 
+  //SERVICIOS DE NOTIFICACIONES
+  // Obtener mis notificaciones
+  Future<List<Map<String, dynamic>>> obtenerMisNotificaciones({
+    int limit = 50,
+    bool soloNoLeidas = false,
+  }) => notificaciones.obtenerMisNotificaciones(
+    limit: limit, 
+    soloNoLeidas: soloNoLeidas
+  );
+
+  // Marcar notificación como leída
+  Future<Map<String, dynamic>> marcarNotificacionComoLeida(int notificationId) =>
+      notificaciones.marcarNotificacionComoLeida(notificationId);
+
+  // Contar notificaciones no leídas
+  Future<int> contarNotificacionesNoLeidas() => 
+      notificaciones.contarNotificacionesNoLeidas();
 
   // PREDICCIONES COMPLETAS
   Future<List<PrediccionCompleta>> getPrediccionesCompletas({
@@ -282,4 +300,5 @@ class ApiService {
 // DASHBOARD ESTUDIANTE
 Future<Map<String, dynamic>> getDashboardEstudiante() => 
     estudiantes.getDashboardEstudiante();
+
 }

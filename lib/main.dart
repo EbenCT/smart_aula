@@ -11,6 +11,7 @@ import 'providers/resumen_estudiante_provider.dart';
 import 'providers/prediccion_completa_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/services.dart';
+import 'services/notification_service.dart';
 import 'utils/debug_logger.dart';
 
 void main() async {
@@ -39,6 +40,11 @@ void main() async {
         // Luego registramos el ApiService que depende del AuthService
         ProxyProvider<AuthService, ApiService>(
           update: (context, authService, _) => ApiService(authService),
+        ),
+
+        // Provider para el servicio de notificaciones
+        Provider<NotificationService>(
+          create: (_) => NotificationService(),
         ),
         
         // Ahora registramos los providers que pueden depender del ApiService
