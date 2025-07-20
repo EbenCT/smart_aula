@@ -1,17 +1,17 @@
 // lib/screens/estudiantes/detalle_materia_estudiante_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import '../../providers/resumen_estudiante_provider.dart';
 import '../../providers/prediccion_completa_provider.dart';
 import '../../models/resumen_estudiante.dart';
-import '../../models/curso.dart';
-import '../../models/materia.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/card_container_widget.dart';
 import '../../widgets/prediccion_completa_widget.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../../config/constants.dart';
 
 class DetalleMateriasEstudianteScreen extends StatefulWidget {
   final String estudianteId;
@@ -164,6 +164,279 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
     }
   }
 
+   void _mostrarDialogoEnviarCorreo() {
+    final TextEditingController correoController = TextEditingController();
+    bool enviando = false;
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: Theme.of(context).dialogBackgroundColor,
+          title: Row(
+            children: [
+              Icon(Icons.email_outlined, color: Theme.of(context).primaryColor),
+              const SizedBox(width: 8),
+              const Text('Enviar Reporte por Correo'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Ingrese el correo electrónico donde desea recibir el reporte (opcional):',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: correoController,
+                decoration: InputDecoration(
+                  hintText: 'correo@ejemplo.com',
+                  prefixIcon: Icon(Icons.email),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  helperText: 'Si no ingresa un correo, se enviará al correo del usuario logueado',
+                  helperMaxLines: 2,
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).primaryColor.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: Theme.of(context).primaryColor,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'El reporte incluirá predicciones de Machine Learning',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: enviando ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: enviando ? null : () {
+                _enviarReportePorCorreo(correoController.text.trim(), setState);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              child: enviando 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('Enviar Reporte'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Método para realizar la llamada API de envío de correo
+  Future<void> _enviarReportePorCorreo(String correoPersonalizado, StateSetter setState) async {
+    setState(() {
+      // Esta variable debe ser declarada en el StatefulBuilder para controlar el estado de carga
+    });
+
+    try {
+      // Obtener el token de autenticación
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final token = authService.token;
+      
+      if (token == null) {
+        throw Exception('No hay token de autenticación');
+      }
+
+      // Preparar la URL con parámetros
+      final baseUrl = '${AppConstants.apiBaseUrl}/info-academica/enviar-reporte-por-correo';
+      final uri = Uri.parse(baseUrl).replace(queryParameters: {
+        'estudiante_id': widget.estudianteId,
+        'incluir_predicciones': 'true',
+        if (correoPersonalizado.isNotEmpty) 'correo_personalizado': correoPersonalizado,
+      });
+
+      print('Enviando reporte a: $uri'); // Para debug
+
+      // Realizar la llamada POST
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 30));
+
+      // Cerrar el diálogo
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+
+      if (response.statusCode == 200) {
+        // Éxito - mostrar mensaje de confirmación
+        _mostrarMensajeExito(correoPersonalizado);
+      } else {
+        // Error del servidor
+        String errorMessage = 'Error al enviar el reporte';
+        try {
+          final responseData = json.decode(response.body);
+          errorMessage = responseData['detail'] ?? responseData['message'] ?? errorMessage;
+        } catch (e) {
+          errorMessage = 'Error del servidor (${response.statusCode})';
+        }
+        throw Exception(errorMessage);
+      }
+
+    } catch (e) {
+      // Cerrar el diálogo si hay error
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      // Mostrar mensaje de error
+      _mostrarMensajeError(e.toString());
+    }
+  }
+
+  // Método para mostrar mensaje de éxito
+  void _mostrarMensajeExito(String correoPersonalizado) {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final correoDestino = correoPersonalizado.isNotEmpty 
+        ? correoPersonalizado 
+        : authService.correo ?? 'su correo registrado';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).dialogBackgroundColor,
+        title: Row(
+          children: [
+            Icon(Icons.check_circle_outline, color: Colors.green, size: 28),
+            const SizedBox(width: 8),
+            const Text('Reporte Enviado'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'El reporte académico ha sido enviado exitosamente a:',
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.email, color: Colors.green, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      correoDestino,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'El reporte incluye información académica completa y predicciones de rendimiento.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Método para mostrar mensaje de error
+  void _mostrarMensajeError(String error) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Error al enviar reporte: $error',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Reintentar',
+          textColor: Colors.white,
+          onPressed: _mostrarDialogoEnviarCorreo,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -222,6 +495,16 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
           ),
         ),
       ),
+          // NUEVO: Botón flotante siempre visible
+    floatingActionButton: FloatingActionButton.extended(
+      onPressed: _mostrarDialogoEnviarCorreo,
+      backgroundColor: Theme.of(context).primaryColor,
+      foregroundColor: Colors.white,
+      icon: const Icon(Icons.email_outlined),
+      label: const Text('ENVIAR CORREO REPORTE'),
+      tooltip: 'Enviar reporte académico por correo electrónico',
+    ),
+    floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -521,7 +804,7 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                evaluacion.tipo,
+                evaluacion.nombre,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
