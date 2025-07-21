@@ -7,6 +7,7 @@ import '../../services/auth_service.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../utils/debug_logger.dart';
+import '../../widgets/notification_icon_widget.dart';
 import './info_academica_hijo_screen.dart'; // Nueva importación
 
 class PadreHomeScreen extends StatefulWidget {
@@ -87,6 +88,7 @@ class _PadreHomeScreenState extends State<PadreHomeScreen>
             onPressed: _refrescarHijos,
             tooltip: 'Actualizar lista',
           ),
+          const NotificationIconWidget(),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'logout') {

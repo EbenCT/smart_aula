@@ -5,6 +5,7 @@ import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../services/biometric_service.dart';
+import '../../widgets/notification_icon_widget.dart';
 import '../../widgets/theme_toggle_button.dart';
 import '../../widgets/resumen_card.dart';
 import '../../models/dashboard_estudiante.dart';
@@ -97,6 +98,7 @@ class _EstudianteHomeScreenState extends State<EstudianteHomeScreen> {
             foregroundColor: Colors.white,
             actions: [
               const ThemeToggleButton(),
+              const NotificationIconWidget(),
               IconButton(
                 icon: const Icon(Icons.refresh),
                 onPressed: _cargarDashboard,
