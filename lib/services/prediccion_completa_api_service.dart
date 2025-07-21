@@ -19,8 +19,9 @@ class PrediccionCompletaApiService extends BaseApiService {
     DebugLogger.info('Gestión ID: $gestionId', tag: 'PREDICCION_COMPLETA');
     
     try {
-      final endpoint = '/ml/estudiante/$estudianteId/materia/$materiaId/gestion/$gestionId/predicciones-completas';
-      DebugLogger.info('Endpoint construido: $endpoint', tag: 'PREDICCION_COMPLETA');
+      // NUEVO ENDPOINT CON QUERY PARAMETERS
+      final endpoint = '/ml/predicciones-completas?estudiante_id=$estudianteId&materia_id=$materiaId&gestion_id=$gestionId';
+      DebugLogger.info('Endpoint actualizado: $endpoint', tag: 'PREDICCION_COMPLETA');
       
       final response = await get(endpoint, useCache: true, cacheMinutes: 10);
       DebugLogger.info('Respuesta recibida del servidor', tag: 'PREDICCION_COMPLETA');
@@ -32,59 +33,39 @@ class PrediccionCompletaApiService extends BaseApiService {
         final success = response['success'] ?? false;
         final mensaje = response['mensaje'] ?? '';
         
-        DebugLogger.info('Success: $success', tag: 'PREDICCION_COMPLETA');
-        DebugLogger.info('Mensaje: $mensaje', tag: 'PREDICCION_COMPLETA');
-        
-        if (success && response.containsKey('data')) {
-          final data = response['data'];
-          DebugLogger.info('Campo data encontrado, tipo: ${data.runtimeType}', tag: 'PREDICCION_COMPLETA');
+        if (success) {
+          DebugLogger.info('Predicciones obtenidas exitosamente', tag: 'PREDICCION_COMPLETA');
+          final data = response['data'] as List<dynamic>? ?? [];
           
-          if (data is List) {
-            DebugLogger.info('Número de predicciones encontradas: ${data.length}', tag: 'PREDICCION_COMPLETA');
-            
-            final predicciones = <PrediccionCompleta>[];
-            
-            for (int i = 0; i < data.length; i++) {
-              try {
-                final prediccionData = data[i] as Map<String, dynamic>;
-                DebugLogger.info('Procesando predicción $i: periodo ${prediccionData['periodo_nombre']}', tag: 'PREDICCION_COMPLETA');
-                
-                final prediccion = PrediccionCompleta.fromJson(prediccionData);
-                predicciones.add(prediccion);
-                
-                DebugLogger.info('Predicción $i procesada: ${prediccion.clasificacion} (${prediccion.resultadoNumerico})', tag: 'PREDICCION_COMPLETA');
-              } catch (e) {
-                DebugLogger.error('Error procesando predicción $i', tag: 'PREDICCION_COMPLETA', error: e);
-                DebugLogger.error('Datos problemáticos: ${data[i]}', tag: 'PREDICCION_COMPLETA');
-              }
-            }
-            
-            DebugLogger.info('${predicciones.length} predicciones procesadas exitosamente', tag: 'PREDICCION_COMPLETA');
-            return predicciones;
-          } else {
-            DebugLogger.error('El campo data no es una Lista: $data', tag: 'PREDICCION_COMPLETA');
-            throw Exception('Formato de datos inesperado');
-          }
+          final predicciones = data.map((json) => PrediccionCompleta.fromJson(json)).toList();
+          DebugLogger.info('${predicciones.length} predicciones convertidas', tag: 'PREDICCION_COMPLETA');
+          
+          return predicciones;
         } else {
-          DebugLogger.warning('La respuesta no indica éxito o no contiene datos', tag: 'PREDICCION_COMPLETA');
-          DebugLogger.info('Success: $success, tiene data: ${response.containsKey('data')}', tag: 'PREDICCION_COMPLETA');
+          DebugLogger.warning('Respuesta no exitosa: $mensaje', tag: 'PREDICCION_COMPLETA');
           
-          if (!success) {
-            throw Exception(mensaje.isNotEmpty ? mensaje : 'Error al obtener predicciones');
-          } else {
-            // Si success es true pero no hay data, devolver lista vacía
-            DebugLogger.info('Success true pero sin data, devolviendo lista vacía', tag: 'PREDICCION_COMPLETA');
+          // Si success es false pero no hay error crítico, devolver lista vacía
+          if (mensaje.toLowerCase().contains('no se encontraron') || 
+              mensaje.toLowerCase().contains('no existen')) {
+            DebugLogger.info('No se encontraron predicciones, devolviendo lista vacía', tag: 'PREDICCION_COMPLETA');
             return [];
+          } else {
+            throw Exception('Error del servidor: $mensaje');
           }
         }
+      } else if (response is List) {
+        DebugLogger.info('Respuesta es una lista directa', tag: 'PREDICCION_COMPLETA');
+        final predicciones = response.map((json) => PrediccionCompleta.fromJson(json)).toList();
+        DebugLogger.info('${predicciones.length} predicciones convertidas desde lista', tag: 'PREDICCION_COMPLETA');
+        return predicciones;
       } else {
-        DebugLogger.error('La respuesta no es un Map válido: ${response.runtimeType}', tag: 'PREDICCION_COMPLETA');
+        DebugLogger.error('Formato de respuesta inesperado: ${response.runtimeType}', tag: 'PREDICCION_COMPLETA');
         throw Exception('Formato de respuesta inesperado');
       }
     } catch (e) {
-      DebugLogger.error('Error al obtener predicciones completas', tag: 'PREDICCION_COMPLETA', error: e);
+      DebugLogger.error('Error obteniendo predicciones completas', tag: 'PREDICCION_COMPLETA', error: e);
       
-      // Manejar errores específicos
+      // Manejo de errores específicos
       if (e.toString().contains('404')) {
         throw Exception('No se encontraron predicciones para este estudiante');
       } else if (e.toString().contains('401')) {
@@ -94,7 +75,7 @@ class PrediccionCompletaApiService extends BaseApiService {
       } else if (e.toString().contains('conexión') || e.toString().contains('internet')) {
         throw Exception('Error de conexión al obtener predicciones');
       } else {
-        throw Exception('Error al obtener predicciones: $e');
+        throw Exception('Error al obtener predicciones completas: $e');
       }
     }
   }
@@ -116,9 +97,17 @@ class PrediccionCompletaApiService extends BaseApiService {
         gestionId: gestionId,
       );
       
+      if (predicciones.isEmpty) {
+        DebugLogger.warning('No hay predicciones disponibles', tag: 'PREDICCION_COMPLETA');
+        return null;
+      }
+      
       final prediccionPeriodo = predicciones.firstWhere(
         (p) => p.periodoId == periodoId,
-        orElse: () => throw Exception('No se encontró predicción para el periodo $periodoId'),
+        orElse: () {
+          DebugLogger.warning('No se encontró predicción para el periodo $periodoId', tag: 'PREDICCION_COMPLETA');
+          throw Exception('No se encontró predicción para el periodo $periodoId');
+        },
       );
       
       DebugLogger.info('Predicción encontrada para periodo $periodoId: ${prediccionPeriodo.clasificacion}', tag: 'PREDICCION_COMPLETA');
@@ -145,11 +134,13 @@ class PrediccionCompletaApiService extends BaseApiService {
       );
       
       if (predicciones.isEmpty) {
+        DebugLogger.warning('No hay predicciones para calcular estadísticas', tag: 'PREDICCION_COMPLETA');
         return {
           'total_predicciones': 0,
           'promedio_resultado': 0.0,
           'tendencia': 'Sin datos',
           'clasificacion_mas_frecuente': 'Sin datos',
+          'predicciones_por_clasificacion': <String, int>{},
         };
       }
       
@@ -181,13 +172,15 @@ class PrediccionCompletaApiService extends BaseApiService {
         contadorClasificaciones[clasificacion] = (contadorClasificaciones[clasificacion] ?? 0) + 1;
       }
       
-      final clasificacionMasFrecuente = contadorClasificaciones.entries
-          .reduce((a, b) => a.value > b.value ? a : b)
-          .key;
+      final clasificacionMasFrecuente = contadorClasificaciones.isNotEmpty
+          ? contadorClasificaciones.entries
+              .reduce((a, b) => a.value > b.value ? a : b)
+              .key
+          : 'Sin datos';
       
       final estadisticas = {
         'total_predicciones': totalPredicciones,
-        'promedio_resultado': promedioResultado,
+        'promedio_resultado': double.parse(promedioResultado.toStringAsFixed(2)),
         'tendencia': tendencia,
         'clasificacion_mas_frecuente': clasificacionMasFrecuente,
         'predicciones_por_clasificacion': contadorClasificaciones,
@@ -198,6 +191,83 @@ class PrediccionCompletaApiService extends BaseApiService {
     } catch (e) {
       DebugLogger.error('Error al calcular estadísticas', tag: 'PREDICCION_COMPLETA', error: e);
       throw Exception('Error al calcular estadísticas de predicciones: $e');
+    }
+  }
+
+  // MÉTODO PARA LIMPIAR CACHÉ DE PREDICCIONES
+  Future<void> limpiarCachePredicciones() async {
+    try {
+      DebugLogger.info('Limpiando caché de predicciones', tag: 'PREDICCION_COMPLETA');
+      // Si tienes un método para limpiar caché específico, úsalo aquí
+      // await clearCache('/ml/predicciones-completas');
+    } catch (e) {
+      DebugLogger.error('Error limpiando caché', tag: 'PREDICCION_COMPLETA', error: e);
+    }
+  }
+
+  // MÉTODO PARA REFRESCAR PREDICCIONES (sin caché)
+  Future<List<PrediccionCompleta>> refrescarPrediccionesCompletas({
+    required int estudianteId,
+    required int materiaId,
+    int gestionId = 1,
+  }) async {
+    DebugLogger.info('=== REFRESCANDO PREDICCIONES COMPLETAS ===', tag: 'PREDICCION_COMPLETA');
+    
+    try {
+      final endpoint = '/ml/predicciones-completas?estudiante_id=$estudianteId&materia_id=$materiaId&gestion_id=$gestionId';
+      DebugLogger.info('Endpoint para refrescar: $endpoint', tag: 'PREDICCION_COMPLETA');
+      
+      // Sin caché para obtener datos frescos
+      final response = await get(endpoint, useCache: false);
+      DebugLogger.info('Respuesta fresca recibida', tag: 'PREDICCION_COMPLETA');
+      
+      if (response is Map<String, dynamic>) {
+        final success = response['success'] ?? false;
+        final mensaje = response['mensaje'] ?? '';
+        
+        if (success) {
+          final data = response['data'] as List<dynamic>? ?? [];
+          final predicciones = data.map((json) => PrediccionCompleta.fromJson(json)).toList();
+          DebugLogger.info('${predicciones.length} predicciones refrescadas', tag: 'PREDICCION_COMPLETA');
+          return predicciones;
+        } else {
+          if (mensaje.toLowerCase().contains('no se encontraron') || 
+              mensaje.toLowerCase().contains('no existen')) {
+            DebugLogger.info('No se encontraron predicciones al refrescar', tag: 'PREDICCION_COMPLETA');
+            return [];
+          } else {
+            throw Exception('Error del servidor: $mensaje');
+          }
+        }
+      } else if (response is List) {
+        final predicciones = response.map((json) => PrediccionCompleta.fromJson(json)).toList();
+        DebugLogger.info('${predicciones.length} predicciones refrescadas desde lista', tag: 'PREDICCION_COMPLETA');
+        return predicciones;
+      } else {
+        throw Exception('Formato de respuesta inesperado');
+      }
+    } catch (e) {
+      DebugLogger.error('Error refrescando predicciones', tag: 'PREDICCION_COMPLETA', error: e);
+      throw Exception('Error al refrescar predicciones: $e');
+    }
+  }
+
+  // VERIFICAR SI HAY PREDICCIONES DISPONIBLES
+  Future<bool> tienePrediccionesDisponibles({
+    required int estudianteId,
+    required int materiaId,
+    int gestionId = 1,
+  }) async {
+    try {
+      final predicciones = await getPrediccionesCompletas(
+        estudianteId: estudianteId,
+        materiaId: materiaId,
+        gestionId: gestionId,
+      );
+      return predicciones.isNotEmpty;
+    } catch (e) {
+      DebugLogger.error('Error verificando disponibilidad de predicciones', tag: 'PREDICCION_COMPLETA', error: e);
+      return false;
     }
   }
 }

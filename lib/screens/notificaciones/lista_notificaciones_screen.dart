@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_api_service.dart';
 import '../../utils/debug_logger.dart';
-import '../../widgets/empty_state_widget.dart';
 
 class ListaNotificacionesScreen extends StatefulWidget {
   static const routeName = '/notificaciones';
