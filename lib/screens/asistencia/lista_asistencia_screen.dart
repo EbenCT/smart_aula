@@ -1,4 +1,6 @@
 // lib/screens/asistencia/lista_asistencia_screen.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -15,6 +17,7 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/location_service.dart';
 import '../../services/sesion_asistencia_service.dart';
+import '../../widgets/sesion_status_widget.dart';
 
 class ListaAsistenciaScreen extends StatefulWidget {
   static const routeName = '/asistencia';
@@ -34,6 +37,11 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
   bool _isCreatingSession = false;
   late SesionAsistenciaService _sesionService;
   final TextEditingController _searchController = TextEditingController();
+  bool _haySesionActiva = false;
+  String? _nombreSesionActiva;
+  int? _estudiantesPresentes = 0;
+  int? _sesionActivaId;
+  Timer? _timerActualizacion;
 
   @override
   void initState() {
@@ -44,12 +52,14 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
       final authService = Provider.of<AuthService>(context, listen: false);
       _sesionService = SesionAsistenciaService(authService);
       _cargarAsistencia();
+      _verificarSesionActiva();
     });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _timerActualizacion?.cancel();
     super.dispose();
   }
 
@@ -109,6 +119,74 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     }
   }
 
+  Future<void> _verificarSesionActiva() async {
+    try {
+      final cursoProvider = Provider.of<CursoProvider>(context, listen: false);
+      if (!cursoProvider.tieneSeleccionCompleta) return;
+
+      final sesiones = await _sesionService.obtenerMisSesiones(
+        cursoId: cursoProvider.cursoSeleccionado!.id,
+        materiaId: cursoProvider.materiaSeleccionada!.id,
+        estado: 'activa',
+      );
+
+      if (sesiones.isNotEmpty && mounted) {
+        final sesionActiva = sesiones.first;
+        setState(() {
+          _haySesionActiva = true;
+          _nombreSesionActiva = sesionActiva['titulo'];
+          _sesionActivaId = sesionActiva['id'];
+        });
+        
+        // Obtener estadísticas de la sesión activa
+        _obtenerEstadisticasSesion(sesionActiva['id']);
+        // Iniciar polling para actualizar estudiantes presentes
+        _iniciarActualizacionEstudiantes(sesionActiva['id']);
+      }
+    } catch (e) {
+      DebugLogger.error('Error verificando sesión activa: $e');
+    }
+  }
+
+  //Actualizar cantidad de estudiantes presentes
+  void _iniciarActualizacionEstudiantes(int sesionId) {
+    _timerActualizacion?.cancel(); // Cancelar timer anterior si existe
+    _timerActualizacion = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (!_haySesionActiva) {
+        timer.cancel();
+        return;
+      }
+      _obtenerEstadisticasSesion(sesionId);
+    });
+  }
+
+  // Obtener estadísticas de la sesión
+  Future<void> _obtenerEstadisticasSesion(int sesionId) async {
+    try {
+      final estadisticas = await _sesionService.obtenerEstadisticasSesion(sesionId);
+      
+      if (mounted) {
+        setState(() {
+          _estudiantesPresentes = estadisticas['estadisticas']['presentes'] ?? 0;
+        });
+      }
+    } catch (e) {
+      DebugLogger.error('Error obteniendo estadísticas: $e');
+    }
+  }
+
+  // Callback para ver detalles de la sesión
+  void _verDetallesSesion() {
+    // Implementar navegación a pantalla de detalles de sesión
+    // Navigator.push(context, MaterialPageRoute(builder: (context) => DetalleSesionScreen()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Funcionalidad de detalles de sesión próximamente'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
 // Agregar este método para crear sesión automática
 Future<void> _crearSesionAutomatica() async {
   if (!mounted) return;
@@ -146,6 +224,18 @@ Future<void> _crearSesionAutomatica() async {
     );
 
     if (resultado != null && mounted) {
+        
+        setState(() {
+          _haySesionActiva = true;
+          _nombreSesionActiva = resultado['data']?['titulo'] ?? 'Sesión de Asistencia';
+          _estudiantesPresentes = 0; // Inicialmente 0
+          _sesionActivaId = resultado['data']?['id'];
+        });
+
+        
+        if (_sesionActivaId != null) {
+          _iniciarActualizacionEstudiantes(_sesionActivaId!);
+        }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Column(
@@ -290,6 +380,12 @@ Future<void> _crearSesionAutomatica() async {
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           body: Column(
             children: [
+              SesionStatusWidget(
+                hasSesionActiva: _haySesionActiva,
+                nombreSesion: _nombreSesionActiva,
+                estudiantesPresentes: _estudiantesPresentes,
+                onVerDetalles: _verDetallesSesion,
+              ),
               // Cabecera con fecha, información de materia y filtro
               SearchHeaderWidget(
                 hintText: 'Buscar estudiante...',

@@ -74,38 +74,197 @@ class SesionAsistenciaService {
   Future<List<Map<String, dynamic>>> obtenerMisSesiones({
     int? cursoId,
     int? materiaId,
-    String? estado = 'activa',
+    String? estado,
+    int limite = 50,
   }) async {
     try {
-      String endpoint = '/asistencia/sesiones/mis-sesiones?limite=50';
+      var url = '${AppConstants.apiBaseUrl}/asistencia/sesiones/mis-sesiones?limite=$limite';
       
+      if (estado != null) {
+        url += '&estado=$estado';
+      }
       if (cursoId != null) {
-        endpoint += '&curso_id=$cursoId';
+        url += '&curso_id=$cursoId';
       }
       if (materiaId != null) {
-        endpoint += '&materia_id=$materiaId';
-      }
-      if (estado != null) {
-        endpoint += '&estado=$estado';
+        url += '&materia_id=$materiaId';
       }
 
-      final url = '${AppConstants.apiBaseUrl}$endpoint';
-
+      DebugLogger.info('Obteniendo sesiones: $url');
+      
       final response = await http.get(
         Uri.parse(url),
         headers: _headers,
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 30));
+
+      DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
-        return List<Map<String, dynamic>>.from(responseData['data'] ?? []);
+        DebugLogger.info('Sesiones obtenidas exitosamente: ${responseData['total']} sesiones');
+        return List<Map<String, dynamic>>.from(responseData['sesiones'] ?? []);
       } else {
-        DebugLogger.error('Error al obtener sesiones: ${response.statusCode}');
-        return [];
+        DebugLogger.error('Error al obtener sesiones: ${response.statusCode} - ${response.body}');
+        throw Exception('Error del servidor: ${response.statusCode}');
       }
     } catch (e) {
-      DebugLogger.error('Error al obtener sesiones: $e');
-      return [];
+      DebugLogger.error('Excepción al obtener sesiones: $e');
+      rethrow;
+    }
+  }
+
+  /// ✅ NUEVO: Obtener estadísticas de una sesión específica
+  Future<Map<String, dynamic>> obtenerEstadisticasSesion(int sesionId) async {
+    try {
+      final url = '${AppConstants.apiBaseUrl}/asistencia/sesiones/$sesionId/estadisticas';
+      
+      DebugLogger.info('Obteniendo estadísticas de sesión: $url');
+      
+      final response = await http.get(
+        Uri.parse(url),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 30));
+
+      DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        DebugLogger.info('Estadísticas obtenidas exitosamente');
+        return responseData;
+      } else {
+        DebugLogger.error('Error al obtener estadísticas: ${response.statusCode} - ${response.body}');
+        throw Exception('Error del servidor: ${response.statusCode}');
+      }
+    } catch (e) {
+      DebugLogger.error('Excepción al obtener estadísticas: $e');
+      rethrow;
+    }
+  }
+
+  /// Obtener detalle completo de una sesión
+  Future<Map<String, dynamic>?> obtenerDetalleSesion(int sesionId) async {
+    try {
+      final url = '${AppConstants.apiBaseUrl}/asistencia/sesiones/$sesionId';
+      
+      DebugLogger.info('Obteniendo detalle de sesión: $url');
+      
+      final response = await http.get(
+        Uri.parse(url),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 30));
+
+      DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        DebugLogger.info('Detalle de sesión obtenido exitosamente');
+        return responseData;
+      } else {
+        DebugLogger.error('Error al obtener detalle: ${response.statusCode} - ${response.body}');
+        throw Exception('Error del servidor: ${response.statusCode}');
+      }
+    } catch (e) {
+      DebugLogger.error('Excepción al obtener detalle: $e');
+      rethrow;
+    }
+  }
+
+  /// Actualizar configuración de una sesión
+  Future<Map<String, dynamic>?> actualizarSesion(
+    int sesionId,
+    Map<String, dynamic> datos,
+  ) async {
+    try {
+      final url = '${AppConstants.apiBaseUrl}/asistencia/sesiones/$sesionId';
+      
+      DebugLogger.info('Actualizando sesión: $url con datos: $datos');
+      
+      final response = await http.put(
+        Uri.parse(url),
+        headers: _headers,
+        body: json.encode(datos),
+      ).timeout(const Duration(seconds: 30));
+
+      DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        DebugLogger.info('Sesión actualizada exitosamente');
+        return responseData;
+      } else {
+        DebugLogger.error('Error al actualizar sesión: ${response.statusCode} - ${response.body}');
+        throw Exception('Error del servidor: ${response.statusCode}');
+      }
+    } catch (e) {
+      DebugLogger.error('Excepción al actualizar sesión: $e');
+      rethrow;
+    }
+  }
+
+  /// Cerrar una sesión de asistencia
+  Future<Map<String, dynamic>?> cerrarSesion(int sesionId) async {
+    try {
+      final url = '${AppConstants.apiBaseUrl}/asistencia/sesiones/$sesionId/cerrar';
+      
+      DebugLogger.info('Cerrando sesión: $url');
+      
+      final response = await http.post(
+        Uri.parse(url),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 30));
+
+      DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        DebugLogger.info('Sesión cerrada exitosamente: ${responseData['message']}');
+        return responseData;
+      } else {
+        DebugLogger.error('Error al cerrar sesión: ${response.statusCode} - ${response.body}');
+        throw Exception('Error del servidor: ${response.statusCode}');
+      }
+    } catch (e) {
+      DebugLogger.error('Excepción al cerrar sesión: $e');
+      rethrow;
+    }
+  }
+
+  /// Justificar ausencia de un estudiante
+  Future<Map<String, dynamic>?> justificarAusencia(
+    int sesionId,
+    int estudianteId,
+    String motivo,
+    String? observaciones,
+  ) async {
+    try {
+      final url = '${AppConstants.apiBaseUrl}/asistencia/sesiones/$sesionId/estudiantes/$estudianteId/justificar';
+      
+      final requestData = {
+        "motivo_justificacion": motivo,
+        if (observaciones != null) "observaciones": observaciones,
+      };
+
+      DebugLogger.info('Justificando ausencia: $url con datos: $requestData');
+      
+      final response = await http.post(
+        Uri.parse(url),
+        headers: _headers,
+        body: json.encode(requestData),
+      ).timeout(const Duration(seconds: 30));
+
+      DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        DebugLogger.info('Ausencia justificada exitosamente');
+        return responseData;
+      } else {
+        DebugLogger.error('Error al justificar ausencia: ${response.statusCode} - ${response.body}');
+        throw Exception('Error del servidor: ${response.statusCode}');
+      }
+    } catch (e) {
+      DebugLogger.error('Excepción al justificar ausencia: $e');
+      rethrow;
     }
   }
 }
