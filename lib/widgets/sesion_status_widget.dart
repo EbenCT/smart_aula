@@ -5,14 +5,14 @@ class SesionStatusWidget extends StatelessWidget {
   final bool hasSesionActiva;
   final String? nombreSesion;
   final int? estudiantesPresentes;
-  final VoidCallback? onVerDetalles;
+  final VoidCallback? onCerrarSesion; // Cambiamos de onVerDetalles a onCerrarSesion
 
   const SesionStatusWidget({
     Key? key,
     required this.hasSesionActiva,
     this.nombreSesion,
     this.estudiantesPresentes,
-    this.onVerDetalles,
+    this.onCerrarSesion, // Actualizado el nombre del callback
   }) : super(key: key);
 
   @override
@@ -71,13 +71,18 @@ class SesionStatusWidget extends StatelessWidget {
               ],
             ),
           ),
-          if (onVerDetalles != null)
-            TextButton(
-              onPressed: onVerDetalles,
-              child: Text(
-                'Ver',
+          if (onCerrarSesion != null)
+            TextButton.icon(
+              onPressed: onCerrarSesion,
+              icon: Icon(
+                Icons.stop_circle_outlined,
+                color: Colors.red.shade700,
+                size: 16,
+              ),
+              label: Text(
+                'Cerrar',
                 style: TextStyle(
-                  color: Colors.green.shade700,
+                  color: Colors.red.shade700,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),

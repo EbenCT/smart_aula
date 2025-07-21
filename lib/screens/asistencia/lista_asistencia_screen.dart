@@ -42,6 +42,7 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
   int? _estudiantesPresentes = 0;
   int? _sesionActivaId;
   Timer? _timerActualizacion;
+   bool _isCerrandoSesion = false;
 
   @override
   void initState() {
@@ -175,18 +176,188 @@ class _ListaAsistenciaScreenState extends State<ListaAsistenciaScreen> {
     }
   }
 
-  // Callback para ver detalles de la sesión
-  void _verDetallesSesion() {
-    // Implementar navegación a pantalla de detalles de sesión
-    // Navigator.push(context, MaterialPageRoute(builder: (context) => DetalleSesionScreen()));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Funcionalidad de detalles de sesión próximamente'),
-        behavior: SnackBarBehavior.floating,
-      ),
+Future<void> _cerrarSesion() async {
+    if (_sesionActivaId == null) return;
+
+    // Mostrar diálogo de confirmación
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.orange.shade700,
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              const Text('Cerrar Sesión'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '¿Está seguro que desea cerrar la sesión de asistencia activa?',
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: Colors.blue.shade700,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Información importante:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '• Los estudiantes ya no podrán marcar asistencia\n'
+                      '• La sesión se sincronizará con el sistema de evaluaciones\n'
+                      '• Esta acción no se puede deshacer',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Cerrar Sesión'),
+            ),
+          ],
+        );
+      },
     );
+
+    // Si el usuario confirmó, proceder a cerrar la sesión
+    if (confirmar == true && mounted) {
+      await _ejecutarCierreSesion();
+    }
   }
 
+  // 4. Método para ejecutar el cierre de sesión
+  Future<void> _ejecutarCierreSesion() async {
+    setState(() {
+      _isCerrandoSesion = true;
+    });
+
+    try {
+      // Llamar al servicio para cerrar la sesión
+      final resultado = await _sesionService.cerrarSesion(_sesionActivaId!);
+      
+      if (resultado != null && mounted) {
+        // Actualizar el estado local
+        setState(() {
+          _haySesionActiva = false;
+          _nombreSesionActiva = null;
+          _estudiantesPresentes = 0;
+          _sesionActivaId = null;
+        });
+
+        // Cancelar el timer de actualización
+        _timerActualizacion?.cancel();
+
+        // Mostrar mensaje de éxito
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    resultado['message'] ?? 'Sesión cerrada exitosamente',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+
+        // Recargar la lista de asistencia
+        await _cargarAsistencia();
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Error al cerrar la sesión: ${error.toString()}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: 'Reintentar',
+              textColor: Colors.white,
+              onPressed: () => _cerrarSesion(),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCerrandoSesion = false;
+        });
+      }
+    }
+  }
 // Agregar este método para crear sesión automática
 Future<void> _crearSesionAutomatica() async {
   if (!mounted) return;
@@ -384,7 +555,7 @@ Future<void> _crearSesionAutomatica() async {
                 hasSesionActiva: _haySesionActiva,
                 nombreSesion: _nombreSesionActiva,
                 estudiantesPresentes: _estudiantesPresentes,
-                onVerDetalles: _verDetallesSesion,
+                onCerrarSesion: _isCerrandoSesion ? null : _cerrarSesion,
               ),
               // Cabecera con fecha, información de materia y filtro
               SearchHeaderWidget(
