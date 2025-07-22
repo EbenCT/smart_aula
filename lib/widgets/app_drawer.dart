@@ -7,6 +7,7 @@ import '../../screens/seleccion/seleccion_curso_materia_screen.dart';
 import '../../screens/asistencia/lista_asistencia_screen.dart';
 import '../../screens/participacion/registro_participacion_screen.dart';
 import '../../screens/estudiantes/lista_estudiantes_screen.dart';
+import '../screens/login/login_screen.dart';
 import 'theme_toggle_button.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -134,10 +135,15 @@ class AppDrawer extends StatelessWidget {
                               ),
                               TextButton(
                                 onPressed: () {
-                                  Navigator.of(context).pop(); // Cerrar el drawer primero
-                                  Future.delayed(const Duration(milliseconds: 100), () {
-                                    Provider.of<AuthService>(context, listen: false).logout();
-                                  });
+                                  Navigator.of(ctx).pop(); // Cerrar diálogo
+                                  Navigator.of(context).pop(); // Cerrar drawer
+                                  // Ejecutar logout después de la navegación
+                                  Provider.of<AuthService>(context, listen: false).logout();
+                                  // Redirigir directamente al LoginScreen
+                                  Navigator.of(context).pushAndRemoveUntil(
+                                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                    (route) => false,
+                                  );                                                                  
                                 },
                                 style: TextButton.styleFrom(
                                   foregroundColor: Colors.red,
