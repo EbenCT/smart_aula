@@ -96,7 +96,7 @@ abstract class BaseApiService {
       final requestFuture = _makeRequest(() => http.get(
         Uri.parse(url),
         headers: _headers,
-      ).timeout(const Duration(seconds: 30)));
+      ).timeout(const Duration(seconds: 60)));
       
       _ongoingRequests[cacheKey] = requestFuture;
       
@@ -141,7 +141,7 @@ abstract class BaseApiService {
         Uri.parse(url),
         headers: _headers,
         body: json.encode(data),
-      ).timeout(const Duration(seconds: 45)));
+      ).timeout(const Duration(seconds: 60)));
       
       // Invalidar cache relacionado después de POST exitoso
       if (invalidateCache) {
@@ -177,7 +177,7 @@ abstract class BaseApiService {
         Uri.parse(url),
         headers: _headers,
         body: json.encode(data),
-      ).timeout(const Duration(seconds: 45)));
+      ).timeout(const Duration(seconds: 60)));
       
       if (invalidateCache) {
         _invalidateRelatedCache(endpoint);
@@ -201,7 +201,7 @@ abstract class BaseApiService {
       final result = await _makeRequest(() => http.delete(
         Uri.parse(url),
         headers: _headers,
-      ).timeout(const Duration(seconds: 30)));
+      ).timeout(const Duration(seconds: 60)));
       
       if (invalidateCache) {
         _invalidateRelatedCache(endpoint);

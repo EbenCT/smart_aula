@@ -134,8 +134,10 @@ class AppDrawer extends StatelessWidget {
                               ),
                               TextButton(
                                 onPressed: () {
-                                  Navigator.of(ctx).pop();
-                                  Provider.of<AuthService>(context, listen: false).logout();
+                                  Navigator.of(context).pop(); // Cerrar el drawer primero
+                                  Future.delayed(const Duration(milliseconds: 100), () {
+                                    Provider.of<AuthService>(context, listen: false).logout();
+                                  });
                                 },
                                 style: TextButton.styleFrom(
                                   foregroundColor: Colors.red,

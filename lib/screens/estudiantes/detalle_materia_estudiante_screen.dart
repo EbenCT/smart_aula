@@ -302,7 +302,7 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
           'Authorization': 'Bearer $token',
           'accept': 'application/json',
         },
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       // Cerrar el diálogo
       if (Navigator.of(context).canPop()) {

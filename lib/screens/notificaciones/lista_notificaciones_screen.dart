@@ -75,28 +75,42 @@ class _ListaNotificacionesScreenState extends State<ListaNotificacionesScreen> {
     }
   }
 
-  String _formatearFecha(String? fechaStr) {
-    if (fechaStr == null) return 'Fecha desconocida';
+String _formatearFecha(dynamic fechaStr) {
+  if (fechaStr == null) return 'Fecha desconocida';
+  
+  try {
+    DateTime fecha;
     
-    try {
-      final fecha = DateTime.parse(fechaStr);
-      final ahora = DateTime.now();
-      final diferencia = ahora.difference(fecha);
-      
-      if (diferencia.inDays > 0) {
-        return '${diferencia.inDays} días atrás';
-      } else if (diferencia.inHours > 0) {
-        return '${diferencia.inHours} horas atrás';
-      } else if (diferencia.inMinutes > 0) {
-        return '${diferencia.inMinutes} minutos atrás';
-      } else {
-        return 'Hace un momento';
-      }
-    } catch (e) {
-      return fechaStr;
+    // Si es un string, parsearlo
+    if (fechaStr is String) {
+      fecha = DateTime.parse(fechaStr);
+    } 
+    // Si ya es DateTime, usarlo directamente
+    else if (fechaStr is DateTime) {
+      fecha = fechaStr;
+    } 
+    // Si no es ninguno de los anteriores, retornar error
+    else {
+      return 'Formato de fecha inválido';
     }
+    
+    final ahora = DateTime.now();
+    final diferencia = ahora.difference(fecha);
+    
+    if (diferencia.inDays > 0) {
+      return '${diferencia.inDays} día${diferencia.inDays == 1 ? '' : 's'} atrás';
+    } else if (diferencia.inHours > 0) {
+      return '${diferencia.inHours} hora${diferencia.inHours == 1 ? '' : 's'} atrás';
+    } else if (diferencia.inMinutes > 0) {
+      return '${diferencia.inMinutes} minuto${diferencia.inMinutes == 1 ? '' : 's'} atrás';
+    } else {
+      return 'Hace un momento';
+    }
+  } catch (e) {
+    // Si el parsing falla, intentar mostrar el valor original
+    return fechaStr.toString();
   }
-
+}
   Color _getColorForTipo(String? tipo) {
     switch (tipo?.toLowerCase()) {
       case 'info':
@@ -307,7 +321,7 @@ class _ListaNotificacionesScreenState extends State<ListaNotificacionesScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                _formatearFecha(notificacion['fecha_creacion']),
+                                _formatearFecha(notificacion['created_at']),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),

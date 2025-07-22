@@ -52,7 +52,7 @@ class SesionAsistenciaService {
         Uri.parse(url),
         headers: _headers,
         body: json.encode(requestData),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
 
@@ -95,7 +95,7 @@ class SesionAsistenciaService {
       final response = await http.get(
         Uri.parse(url),
         headers: _headers,
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
 
@@ -123,7 +123,7 @@ class SesionAsistenciaService {
       final response = await http.get(
         Uri.parse(url),
         headers: _headers,
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
 
@@ -151,7 +151,7 @@ class SesionAsistenciaService {
       final response = await http.get(
         Uri.parse(url),
         headers: _headers,
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
 
@@ -183,7 +183,7 @@ class SesionAsistenciaService {
         Uri.parse(url),
         headers: _headers,
         body: json.encode(datos),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
 
@@ -211,7 +211,7 @@ class SesionAsistenciaService {
       final response = await http.post(
         Uri.parse(url),
         headers: _headers,
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
 
@@ -250,7 +250,7 @@ class SesionAsistenciaService {
         Uri.parse(url),
         headers: _headers,
         body: json.encode(requestData),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       DebugLogger.info('Respuesta del servidor: ${response.statusCode}');
 
