@@ -108,7 +108,7 @@ class _DetalleEstudianteScreenState extends State<DetalleEstudianteScreen>
       await prediccionProvider.precargarPredicciones(
         estudianteId: int.parse(widget.estudianteId),
         materiaId: cursoProvider.materiaSeleccionada!.id,
-        gestionId: 1,
+        gestionId: 2,
       );
     } catch (e) {
       // Fallar silenciosamente en precarga
@@ -129,7 +129,7 @@ class _DetalleEstudianteScreenState extends State<DetalleEstudianteScreen>
     prediccionProvider.invalidarCache(
       estudianteId: int.parse(widget.estudianteId),
       materiaId: Provider.of<CursoProvider>(context, listen: false).materiaSeleccionada?.id,
-      gestionId: 1,
+      gestionId: 2,
     );
     
     await _cargarDatosEstudiante();
@@ -206,7 +206,7 @@ class _DetalleEstudianteScreenState extends State<DetalleEstudianteScreen>
                     PrediccionCompletaWidget(
                       estudianteId: int.parse(widget.estudianteId),
                       materiaId: cursoProvider.materiaSeleccionada!.id,
-                      gestionId: 1,
+                      gestionId: 2,
                     ),
                   
                   // Resumen académico

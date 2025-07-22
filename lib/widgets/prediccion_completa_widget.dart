@@ -15,7 +15,7 @@ class PrediccionCompletaWidget extends StatefulWidget {
     Key? key,
     required this.estudianteId,
     required this.materiaId,
-    this.gestionId = 1,
+    this.gestionId = 2,
   }) : super(key: key);
 
   @override

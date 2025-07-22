@@ -128,7 +128,7 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
       await prediccionProvider.precargarPredicciones(
         estudianteId: int.parse(widget.estudianteId),
         materiaId: widget.materiaId,
-        gestionId: 1,
+        gestionId: 2,
       );
     } catch (e) {
       debugPrint('Error precargando predicciones: $e');
@@ -147,7 +147,7 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
     prediccionProvider.invalidarCache(
       estudianteId: int.parse(widget.estudianteId),
       materiaId: widget.materiaId,
-      gestionId: 1,
+      gestionId: 2,
     );
     
     await _cargarDatosEstudiante();
@@ -483,7 +483,7 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
               PrediccionCompletaWidget(
                 estudianteId: int.parse(widget.estudianteId),
                 materiaId: widget.materiaId,
-                gestionId: 1,
+                gestionId: 2,
               ),
               
               // Resumen académico

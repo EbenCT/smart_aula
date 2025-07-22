@@ -69,7 +69,7 @@ class ApiService {
   Future<List<PrediccionCompleta>> getPrediccionesCompletas({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) => prediccionesCompletas.getPrediccionesCompletas(
     estudianteId: estudianteId,
     materiaId: materiaId,
@@ -80,7 +80,7 @@ class ApiService {
     required int estudianteId,
     required int materiaId,
     required int periodoId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) => prediccionesCompletas.getPrediccionPorPeriodo(
     estudianteId: estudianteId,
     materiaId: materiaId,
@@ -91,7 +91,7 @@ class ApiService {
   Future<Map<String, dynamic>> getEstadisticasPredicciones({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) => prediccionesCompletas.getEstadisticasPredicciones(
     estudianteId: estudianteId,
     materiaId: materiaId,

@@ -112,7 +112,7 @@ class PrediccionCompletaProvider with ChangeNotifier {
     required int estudianteId,
     required int materiaId,
     required int periodoId,
-    int gestionId = 1,
+    int gestionId = 2,
     bool forceRefresh = false,
   }) async {
     DebugLogger.info('=== OBTENIENDO PREDICCIÓN POR PERIODO ===', tag: 'PREDICCION_COMPLETA_PROVIDER');
@@ -143,7 +143,7 @@ class PrediccionCompletaProvider with ChangeNotifier {
   Future<Map<String, dynamic>> getEstadisticasPredicciones({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1,
+    int gestionId = 2,
     bool forceRefresh = false,
   }) async {
     DebugLogger.info('=== OBTENIENDO ESTADÍSTICAS DE PREDICCIONES ===', tag: 'PREDICCION_COMPLETA_PROVIDER');
@@ -181,7 +181,7 @@ class PrediccionCompletaProvider with ChangeNotifier {
   List<PrediccionCompleta>? getPrediccionesFromCache({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) {
     final cacheKey = _getCacheKey(estudianteId, materiaId, gestionId);
     
@@ -198,7 +198,7 @@ class PrediccionCompletaProvider with ChangeNotifier {
   bool hasPrediccionesInCache({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) {
     final cacheKey = _getCacheKey(estudianteId, materiaId, gestionId);
     final hasPredictions = _isCacheFresh(cacheKey) && _prediccionesCache.containsKey(cacheKey);
@@ -211,7 +211,7 @@ class PrediccionCompletaProvider with ChangeNotifier {
   Map<String, dynamic> getResumenRapido({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) {
     final predicciones = getPrediccionesFromCache(
       estudianteId: estudianteId,
@@ -358,7 +358,7 @@ class PrediccionCompletaProvider with ChangeNotifier {
   Future<void> precargarPredicciones({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) async {
     if (!hasPrediccionesInCache(
       estudianteId: estudianteId,

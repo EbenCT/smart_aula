@@ -11,7 +11,7 @@ class PrediccionCompletaApiService extends BaseApiService {
   Future<List<PrediccionCompleta>> getPrediccionesCompletas({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1, // Siempre será 1 según tu especificación
+    int gestionId = 2, // Siempre será 1 según tu especificación
   }) async {
     DebugLogger.info('=== OBTENIENDO PREDICCIONES COMPLETAS ===', tag: 'PREDICCION_COMPLETA');
     DebugLogger.info('Estudiante ID: $estudianteId', tag: 'PREDICCION_COMPLETA');
@@ -85,7 +85,7 @@ class PrediccionCompletaApiService extends BaseApiService {
     required int estudianteId,
     required int materiaId,
     required int periodoId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) async {
     DebugLogger.info('=== OBTENIENDO PREDICCIÓN POR PERIODO ===', tag: 'PREDICCION_COMPLETA');
     DebugLogger.info('Estudiante: $estudianteId, Materia: $materiaId, Periodo: $periodoId', tag: 'PREDICCION_COMPLETA');
@@ -122,7 +122,7 @@ class PrediccionCompletaApiService extends BaseApiService {
   Future<Map<String, dynamic>> getEstadisticasPredicciones({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) async {
     DebugLogger.info('=== CALCULANDO ESTADÍSTICAS DE PREDICCIONES ===', tag: 'PREDICCION_COMPLETA');
     
@@ -209,7 +209,7 @@ class PrediccionCompletaApiService extends BaseApiService {
   Future<List<PrediccionCompleta>> refrescarPrediccionesCompletas({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) async {
     DebugLogger.info('=== REFRESCANDO PREDICCIONES COMPLETAS ===', tag: 'PREDICCION_COMPLETA');
     
@@ -256,7 +256,7 @@ class PrediccionCompletaApiService extends BaseApiService {
   Future<bool> tienePrediccionesDisponibles({
     required int estudianteId,
     required int materiaId,
-    int gestionId = 1,
+    int gestionId = 2,
   }) async {
     try {
       final predicciones = await getPrediccionesCompletas(
