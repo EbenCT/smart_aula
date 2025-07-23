@@ -44,6 +44,9 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
   bool _dataLoaded = false;
   Map<String, dynamic>? _estudianteInfo;
   late ApiService _apiService;
+  
+  // NUEVA: Variable para controlar el estado de envío de correo
+  bool _enviandoCorreo = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -166,114 +169,148 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
     }
   }
 
-   void _mostrarDialogoEnviarCorreo() {
+  void _mostrarDialogoEnviarCorreo() {
+    // Verificar si ya se está enviando un correo
+    if (_enviandoCorreo) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+              ),
+              SizedBox(width: 12),
+              Text('Ya se está enviando un reporte, por favor espere...'),
+            ],
+          ),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     final TextEditingController correoController = TextEditingController();
-    bool enviando = false;
     
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          backgroundColor: Theme.of(context).dialogBackgroundColor,
-          title: Row(
-            children: [
-              Icon(Icons.email_outlined, color: Theme.of(context).primaryColor),
-              const SizedBox(width: 8),
-              const Text('Enviar Reporte por Correo'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Ingrese el correo electrónico donde desea recibir el reporte (opcional):',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
-                ),
+      barrierDismissible: true, // CAMBIADO: Permitir cerrar el diálogo
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).dialogBackgroundColor,
+        title: Row(
+          children: [
+            Icon(Icons.email_outlined, color: Theme.of(context).primaryColor),
+            const SizedBox(width: 8),
+            const Text('Enviar Reporte por Correo'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Ingrese el correo electrónico donde desea recibir el reporte (opcional):',
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: correoController,
-                decoration: InputDecoration(
-                  hintText: 'correo@ejemplo.com',
-                  prefixIcon: Icon(Icons.email),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  helperText: 'Si no ingresa un correo, se enviará al correo del usuario logueado',
-                  helperMaxLines: 2,
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: correoController,
+              decoration: InputDecoration(
+                hintText: 'correo@ejemplo.com',
+                prefixIcon: const Icon(Icons.email),
+                border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(context).primaryColor.withOpacity(0.3),
-                  ),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: Theme.of(context).primaryColor,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'El reporte incluirá predicciones de Machine Learning',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).primaryColor,
-                        ),
+                helperText: 'Si no ingresa un correo, se enviará al correo del usuario logueado',
+                helperMaxLines: 2,
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(context).primaryColor.withOpacity(0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Theme.of(context).primaryColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'El reporte se procesará en segundo plano (hasta 2 minutos). Podrás seguir usando la app mientras tanto.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).primaryColor,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: enviando ? null : () => Navigator.of(ctx).pop(),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: enviando ? null : () {
-                _enviarReportePorCorreo(correoController.text.trim(), setState);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).primaryColor,
-                foregroundColor: Colors.white,
-              ),
-              child: enviando 
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Enviar Reporte'),
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // Cerrar diálogo inmediatamente y procesar en segundo plano
+              Navigator.of(ctx).pop();
+              _enviarReportePorCorreo(correoController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Enviar Reporte'),
+          ),
+        ],
       ),
     );
   }
 
-  // Método para realizar la llamada API de envío de correo
-  Future<void> _enviarReportePorCorreo(String correoPersonalizado, StateSetter setState) async {
+  // MÉTODO MODIFICADO: Realizar la llamada API de envío de correo en segundo plano
+  Future<void> _enviarReportePorCorreo(String correoPersonalizado) async {
+    // Establecer estado de envío global
     setState(() {
-      // Esta variable debe ser declarada en el StatefulBuilder para controlar el estado de carga
+      _enviandoCorreo = true;
     });
+
+    // Mostrar notificación de inicio
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+            ),
+            SizedBox(width: 12),
+            Text('Procesando reporte en segundo plano...'),
+          ],
+        ),
+        backgroundColor: Colors.blue,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
 
     try {
       // Obtener el token de autenticación
@@ -292,9 +329,9 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
         if (correoPersonalizado.isNotEmpty) 'correo_personalizado': correoPersonalizado,
       });
 
-      print('Enviando reporte a: $uri'); // Para debug
+      debugPrint('Enviando reporte a: $uri'); // Para debug
 
-      // Realizar la llamada POST
+      // MODIFICADO: Realizar la llamada POST SIN TIMEOUT
       final response = await http.post(
         uri,
         headers: {
@@ -302,16 +339,14 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
           'Authorization': 'Bearer $token',
           'accept': 'application/json',
         },
-      ).timeout(const Duration(seconds: 60));
-
-      // Cerrar el diálogo
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
+        // SIN .timeout() para permitir requests largos
+      );
 
       if (response.statusCode == 200) {
         // Éxito - mostrar mensaje de confirmación
-        _mostrarMensajeExito(correoPersonalizado);
+        if (mounted) {
+          _mostrarMensajeExito(correoPersonalizado);
+        }
       } else {
         // Error del servidor
         String errorMessage = 'Error al enviar el reporte';
@@ -325,13 +360,17 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
       }
 
     } catch (e) {
-      // Cerrar el diálogo si hay error
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
+      // Mostrar mensaje de error solo si el widget sigue montado
+      if (mounted) {
+        _mostrarMensajeError(e.toString());
       }
-      
-      // Mostrar mensaje de error
-      _mostrarMensajeError(e.toString());
+    } finally {
+      // IMPORTANTE: Resetear el estado de envío global
+      if (mounted) {
+        setState(() {
+          _enviandoCorreo = false;
+        });
+      }
     }
   }
 
@@ -497,16 +536,29 @@ class _DetalleMateriasEstudianteScreenState extends State<DetalleMateriasEstudia
           ),
         ),
       ),
-          // NUEVO: Botón flotante siempre visible
-    floatingActionButton: FloatingActionButton.extended(
-      onPressed: _mostrarDialogoEnviarCorreo,
-      backgroundColor: Theme.of(context).primaryColor,
-      foregroundColor: Colors.white,
-      icon: const Icon(Icons.email_outlined),
-      label: const Text('ENVIAR CORREO REPORTE'),
-      tooltip: 'Enviar reporte académico por correo electrónico',
-    ),
-    floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      // MODIFICADO: FloatingActionButton con estado condicional
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _enviandoCorreo ? null : _mostrarDialogoEnviarCorreo,
+        backgroundColor: _enviandoCorreo 
+            ? Colors.grey 
+            : Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
+        icon: _enviandoCorreo 
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Icon(Icons.email_outlined),
+        label: Text(_enviandoCorreo ? 'ENVIANDO...' : 'ENVIAR CORREO REPORTE'),
+        tooltip: _enviandoCorreo 
+            ? 'Enviando reporte, por favor espere...' 
+            : 'Enviar reporte académico por correo electrónico',
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
